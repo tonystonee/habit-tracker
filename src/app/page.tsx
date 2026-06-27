@@ -5,31 +5,7 @@ import Link from "next/link";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-
-// --- Constants ---
-
-const POSITIVE = [
-  "Gym",
-  "Walking",
-  "Meditate",
-  "Take Creatine",
-  "Take Medication",
-  "Weekly Money Review",
-];
-
-const FLAGS = [
-  "Alcohol",
-  "Doomscrolling",
-  "Impulse Purchase",
-  "Junk Food / Late Night Eating",
-];
-
-// How many times per week each positive habit should be done.
-// Defaults to 7 (daily) for any habit not listed here.
-const WEEKLY_TARGETS: Record<string, number> = {
-  "Gym": 4,
-  "Weekly Money Review": 1,
-};
+import { POSITIVE, FLAGS, WEEKLY_TARGETS } from "@/lib/habits";
 
 // --- Types ---
 

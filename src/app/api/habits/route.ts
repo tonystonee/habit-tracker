@@ -1,25 +1,6 @@
 import { Client } from "@notionhq/client";
 import { NextResponse } from "next/server";
-
-// --- Constants ---
-
-const POSITIVE = [
-  "Gym",
-  "Walking",
-  "Meditate",
-  "Take Creatine",
-  "Take Medication",
-  "Weekly Money Review",
-];
-
-const FLAGS = [
-  "Alcohol",
-  "Doomscrolling",
-  "Impulse Purchase",
-  "Junk Food / Late Night Eating",
-];
-
-const ALL_HABITS = [...POSITIVE, ...FLAGS];
+import { ALL_HABITS } from "@/lib/habits";
 
 // --- Handler ---
 
