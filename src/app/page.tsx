@@ -504,22 +504,25 @@ export default function Dashboard() {
       <div className="max-w-4xl mx-auto">
 
         {/* Header */}
-        <div className="mb-10">
-          <div className="flex items-baseline justify-between mb-1.5">
-            <h1 className="text-sm font-medium tracking-[0.3em] uppercase text-primary">
-              habit tracker
-            </h1>
-            <Link
-              href="/today"
-              className="text-[10px] tracking-[0.15em] uppercase text-muted-foreground hover:text-foreground transition-colors"
-            >
-              today →
-            </Link>
-          </div>
+        <div className="mb-6">
+          <h1 className="text-sm font-medium tracking-[0.3em] uppercase text-primary mb-1.5">
+            habit tracker
+          </h1>
           <p className="text-[11px] text-muted-foreground tracking-wide">
             {rangeLabel} · {raw.length} entries
           </p>
         </div>
+
+        {/* Today CTA */}
+        <Link
+          href="/today"
+          className="flex items-center justify-between w-full mb-8 px-4 py-3 rounded-lg border border-primary/40 bg-primary/5 hover:bg-primary/10 hover:border-primary/70 transition-colors group"
+        >
+          <span className="text-sm font-semibold tracking-[0.15em] uppercase text-primary">
+            log today's habits
+          </span>
+          <span className="text-primary text-lg group-hover:translate-x-0.5 transition-transform">→</span>
+        </Link>
 
         {/* Loading / error states */}
         {loading && (
