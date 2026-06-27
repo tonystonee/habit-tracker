@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -52,30 +52,77 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+interface ProgressBarProps {
+  done: number;
+  total: number;
+}
+
+function ProgressBar({ done, total }: ProgressBarProps) {
+  const pct = total === 0 ? 0 : (done / total) * 100;
+  const color = pct === 100 ? "#4ade80" : pct >= 50 ? "#facc15" : "#6b7280";
+
+  return (
+    <div className="mb-10">
+      <div className="flex justify-between items-baseline mb-2">
+        <span className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+          progress
+        </span>
+        <span
+          className="text-[11px] tabular-nums transition-colors duration-300"
+          style={{ color }}
+        >
+          {done}/{total}
+        </span>
+      </div>
+      <div className="h-0.5 w-full bg-muted rounded-full overflow-hidden">
+        <div
+          className="h-full rounded-full transition-[width,background-color] duration-500 ease-out"
+          style={{ width: `${pct}%`, background: color }}
+        />
+      </div>
+    </div>
+  );
+}
+
 interface HabitRowProps {
   habit: string;
   checked: boolean;
   isFlag: boolean;
   disabled: boolean;
+  flashing: boolean;
   onToggle: (habit: string, next: boolean) => void;
 }
 
-function HabitRow({ habit, checked, isFlag, disabled, onToggle }: HabitRowProps) {
-  const activeColor = isFlag ? "text-red-400" : "text-green-400";
+function HabitRow({ habit, checked, isFlag, disabled, flashing, onToggle }: HabitRowProps) {
+  const flashBg = flashing
+    ? isFlag
+      ? "bg-red-500/10"
+      : "bg-green-500/10"
+    : "bg-transparent";
 
   return (
     <label
-      className={`flex items-center gap-3 cursor-pointer group select-none ${disabled ? "opacity-50 pointer-events-none" : ""}`}
+      className={`flex items-center gap-3 cursor-pointer group select-none rounded px-2 py-1 -mx-2 transition-colors duration-300 ${flashBg} ${
+        disabled ? "opacity-50 pointer-events-none" : ""
+      }`}
     >
       <Checkbox
         checked={checked}
         onCheckedChange={(val) => onToggle(habit, val === true)}
         disabled={disabled}
-        className={checked ? (isFlag ? "border-red-500 data-[state=checked]:bg-red-700" : "") : ""}
+        className={
+          checked && isFlag
+            ? "border-red-500 data-[state=checked]:bg-red-700 data-[state=checked]:border-red-700"
+            : ""
+        }
       />
       <span
-        className={`text-[12px] uppercase tracking-wide transition-colors ${
-          checked ? activeColor : "text-muted-foreground group-hover:text-foreground"
+        className={`text-[12px] uppercase tracking-wide transition-all duration-300 ${
+          checked
+            ? isFlag
+              ? "text-red-400"
+              : "text-muted-foreground/40 line-through decoration-muted-foreground/30"
+            : "text-muted-foreground group-hover:text-foreground"
         }`}
       >
         {habit}
@@ -91,8 +138,9 @@ export default function TodayPage() {
   const [pageId, setPageId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  // Track which habits are mid-save to prevent double-clicks
   const [saving, setSaving] = useState<Set<string>>(new Set());
+  // Tracks which rows are mid-flash so we can clear after the animation
+  const [flashing, setFlashing] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetch("/api/today")
@@ -106,10 +154,21 @@ export default function TodayPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const flash = useCallback((habit: string) => {
+    setFlashing((prev) => new Set(prev).add(habit));
+    setTimeout(() => {
+      setFlashing((prev) => {
+        const next = new Set(prev);
+        next.delete(habit);
+        return next;
+      });
+    }, 600);
+  }, []);
+
   async function toggle(habit: string, next: boolean) {
-    // Optimistic update
     setHabits((prev) => ({ ...prev, [habit]: next }));
     setSaving((prev) => new Set(prev).add(habit));
+    if (next) flash(habit);
 
     try {
       const res = await fetch("/api/today", {
@@ -122,10 +181,8 @@ export default function TodayPage() {
 
       if (!res.ok || data.error) throw new Error(data.error ?? "Save failed");
 
-      // If a new page was created, store its ID so subsequent toggles hit the same page
       if (data.pageId && !pageId) setPageId(data.pageId);
     } catch {
-      // Roll back optimistic update on failure
       setHabits((prev) => ({ ...prev, [habit]: !next }));
     } finally {
       setSaving((prev) => {
@@ -172,46 +229,52 @@ export default function TodayPage() {
         )}
 
         {!loading && !err && (
-          <div className="space-y-10">
+          <div>
+            <ProgressBar done={positiveChecked} total={POSITIVE.length} />
 
-            {/* Positive habits */}
-            <section>
-              <SectionLabel>
-                positive habits · {positiveChecked}/{POSITIVE.length}
-              </SectionLabel>
-              <div className="space-y-4">
-                {POSITIVE.map((habit) => (
-                  <HabitRow
-                    key={habit}
-                    habit={habit}
-                    checked={habits[habit] ?? false}
-                    isFlag={false}
-                    disabled={saving.has(habit)}
-                    onToggle={toggle}
-                  />
-                ))}
-              </div>
-            </section>
+            <div className="space-y-10">
 
-            {/* Watch list */}
-            <section>
-              <SectionLabel>
-                watch list{flagsChecked > 0 ? ` · ${flagsChecked} flagged` : " · clean"}
-              </SectionLabel>
-              <div className="space-y-4">
-                {FLAGS.map((habit) => (
-                  <HabitRow
-                    key={habit}
-                    habit={habit}
-                    checked={habits[habit] ?? false}
-                    isFlag={true}
-                    disabled={saving.has(habit)}
-                    onToggle={toggle}
-                  />
-                ))}
-              </div>
-            </section>
+              {/* Positive habits */}
+              <section>
+                <SectionLabel>
+                  positive habits · {positiveChecked}/{POSITIVE.length}
+                </SectionLabel>
+                <div className="space-y-1">
+                  {POSITIVE.map((habit) => (
+                    <HabitRow
+                      key={habit}
+                      habit={habit}
+                      checked={habits[habit] ?? false}
+                      isFlag={false}
+                      disabled={saving.has(habit)}
+                      flashing={flashing.has(habit)}
+                      onToggle={toggle}
+                    />
+                  ))}
+                </div>
+              </section>
 
+              {/* Watch list */}
+              <section>
+                <SectionLabel>
+                  watch list{flagsChecked > 0 ? ` · ${flagsChecked} flagged` : " · clean"}
+                </SectionLabel>
+                <div className="space-y-1">
+                  {FLAGS.map((habit) => (
+                    <HabitRow
+                      key={habit}
+                      habit={habit}
+                      checked={habits[habit] ?? false}
+                      isFlag={true}
+                      disabled={saving.has(habit)}
+                      flashing={flashing.has(habit)}
+                      onToggle={toggle}
+                    />
+                  ))}
+                </div>
+              </section>
+
+            </div>
           </div>
         )}
 
