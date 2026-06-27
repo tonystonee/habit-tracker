@@ -66,6 +66,37 @@ Prefer clear component and prop names over explanatory comments. If a comment is
 
 Never add `Co-Authored-By: Claude` trailers to commit messages.
 
+**Branch naming:** `type/short-description` in kebab-case
+- `feat/habit-grid-view`
+- `fix/notion-date-parsing`
+- `chore/update-env-example`
+
+Types: `feat`, `fix`, `chore`, `refactor`, `docs`
+
+**Commit messages:** Conventional Commits format
+- `feat: add streak calculation for flags`
+- `fix: handle missing Notion date field`
+- `chore: add .env.local.example`
+- Always lowercase, no period at end, imperative mood ("add" not "added")
+
+**Rules:**
+- One logical change per commit
+- Never commit directly to `main`
+- Branch off `main`, PR back to `main` when feature is complete
+
+**Workflow — branch, merge, clean up:**
+```bash
+git checkout -b type/short-description        # branch off main
+git add <files>
+git commit -m "type: message"                 # conventional commit
+git push -u origin type/short-description     # push branch
+git checkout master
+git merge --no-ff type/short-description -m "merge: type/short-description into master"
+git push origin master
+git branch -d type/short-description          # delete local
+git push origin --delete type/short-description  # delete remote
+```
+
 ## Stack
 
 - **Framework**: Next.js 15 (App Router)
