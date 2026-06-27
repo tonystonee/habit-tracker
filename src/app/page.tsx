@@ -24,6 +24,13 @@ const FLAGS = [
   "Junk Food / Late Night Eating",
 ];
 
+// How many times per week each positive habit should be done.
+// Defaults to 7 (daily) for any habit not listed here.
+const WEEKLY_TARGETS: Record<string, number> = {
+  "Gym": 4,
+  "Weekly Money Review": 1,
+};
+
 // --- Types ---
 
 type Entry = { date: string; [k: string]: string | boolean };
@@ -375,11 +382,18 @@ function ProgressTable({ habits, periods, isFlag }: { habits: string[]; periods:
                     </td>
                   );
                 }
-                const rate = completionRate(habit, p.data);
+                const count = p.data.filter((e) => e[habit] === true).length;
+                // Scale the weekly target to the actual number of days in this period
+                const weeklyTarget = WEEKLY_TARGETS[habit] ?? 7;
+                const periodTarget = weeklyTarget * (p.data.length / 7);
+                const rate = p.data.length ? Math.min(1, count / periodTarget) : 0;
+                const label = p.data.length
+                  ? `${count}/${Math.round(periodTarget)}`
+                  : "—";
                 return (
                   <td key={p.key} className="text-center" style={{ paddingTop: 3, paddingBottom: 3 }}>
                     <span className="tabular-nums" style={{ fontSize: 11, color: rateColor(rate) }}>
-                      {p.data.length ? `${Math.round(rate * 100)}%` : "—"}
+                      {label}
                     </span>
                   </td>
                 );
