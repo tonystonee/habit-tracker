@@ -22,14 +22,14 @@
 
 :root {
   --background: #0f0f0f;
-  --foreground: #e0e0e0;
-  --card: #111111;
-  --card-foreground: #e0e0e0;
-  --muted: #1c1c1c;
-  --muted-foreground: #555555;
+  --foreground: #e8e8e8;
+  --card: #161616;
+  --card-foreground: #e8e8e8;
+  --muted: #222222;
+  --muted-foreground: #888888;
   --primary: #4ade80;
   --primary-foreground: #0f0f0f;
-  --border: #1e1e1e;
+  --border: #2e2e2e;
   --ring: #4ade80;
   --radius: 0.25rem;
 }

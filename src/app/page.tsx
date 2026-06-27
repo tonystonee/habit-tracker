@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -310,9 +311,17 @@ export default function Dashboard() {
 
         {/* Header */}
         <div className="mb-10">
-          <h1 className="text-sm font-medium tracking-[0.3em] uppercase text-primary mb-1.5">
-            habit tracker
-          </h1>
+          <div className="flex items-baseline justify-between mb-1.5">
+            <h1 className="text-sm font-medium tracking-[0.3em] uppercase text-primary">
+              habit tracker
+            </h1>
+            <Link
+              href="/today"
+              className="text-[10px] tracking-[0.15em] uppercase text-muted-foreground hover:text-foreground transition-colors"
+            >
+              today →
+            </Link>
+          </div>
           <p className="text-[11px] text-muted-foreground tracking-wide">
             {rangeLabel} · {raw.length} entries
           </p>
