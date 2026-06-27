@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState, useEffect, useMemo } from "react";
+import { Fragment, useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
@@ -66,6 +66,54 @@ function streak(key: string, data: Entry[], wantTrue: boolean): number {
 /** Returns the fraction of days in `data` where `key` was true. */
 function completionRate(key: string, data: Entry[]): number {
   return data.length ? data.filter((e) => e[key] === true).length / data.length : 0;
+}
+
+// --- Progress helpers ---
+
+type Period = { label: string; key: string; data: Entry[] };
+
+/**
+ * Groups `entries` into Monday-anchored ISO weeks.
+ * Returns periods sorted oldest → newest.
+ */
+function groupByWeek(entries: Entry[]): Period[] {
+  const weeks = new Map<string, Entry[]>();
+  for (const e of entries) {
+    const d = new Date(e.date + "T12:00:00");
+    const mon = new Date(d);
+    // +6 % 7 converts Sun=0 … Sat=6 → Mon=0 … Sun=6, then we step back to Monday
+    mon.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    const key = mon.toISOString().split("T")[0];
+    if (!weeks.has(key)) weeks.set(key, []);
+    weeks.get(key)!.push(e);
+  }
+  return Array.from(weeks.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, data]) => {
+      const d = new Date(key + "T12:00:00");
+      const label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      return { label, key, data };
+    });
+}
+
+/**
+ * Groups `entries` into calendar months (YYYY-MM).
+ * Returns periods sorted oldest → newest.
+ */
+function groupByMonth(entries: Entry[]): Period[] {
+  const months = new Map<string, Entry[]>();
+  for (const e of entries) {
+    const key = e.date.slice(0, 7);
+    if (!months.has(key)) months.set(key, []);
+    months.get(key)!.push(e);
+  }
+  return Array.from(months.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, data]) => {
+      const [y, m] = key.split("-").map(Number);
+      const label = new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+      return { label, key, data };
+    });
 }
 
 /** Maps a 0–1 completion rate to a green / yellow / red hex color. */
@@ -279,6 +327,138 @@ function FlagsView({ data }: { data: Entry[] }) {
   );
 }
 
+// --- Progress tab ---
+
+/**
+ * Renders a table of habits × time-periods for either weekly or monthly groupings.
+ *
+ * @param habits   - Ordered list of habit names to display.
+ * @param periods  - Pre-grouped time buckets with their entry arrays.
+ * @param isFlag   - When true, uses inverse color scale (lower occurrences = green).
+ */
+function ProgressTable({ habits, periods, isFlag }: { habits: string[]; periods: Period[]; isFlag: boolean }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full" style={{ borderSpacing: "0 2px", borderCollapse: "separate" }}>
+        <thead>
+          <tr>
+            <th style={{ minWidth: 170 }} />
+            {periods.map((p) => (
+              <th
+                key={p.key}
+                className="text-muted-foreground font-normal text-center pb-3"
+                style={{ fontSize: 9, minWidth: 64 }}
+              >
+                {p.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {habits.map((habit) => (
+            <tr key={habit}>
+              <td
+                className="text-muted-foreground text-right pr-4 whitespace-nowrap"
+                style={{ fontSize: 10, paddingTop: 3, paddingBottom: 3 }}
+              >
+                {habit}
+              </td>
+              {periods.map((p) => {
+                if (isFlag) {
+                  const count = p.data.filter((e) => e[habit] === true).length;
+                  const color = count === 0 ? "#4ade80" : count <= 2 ? "#facc15" : "#f87171";
+                  return (
+                    <td key={p.key} className="text-center" style={{ paddingTop: 3, paddingBottom: 3 }}>
+                      <span className="tabular-nums" style={{ fontSize: 11, color }}>
+                        {count === 0 ? "—" : `${count}×`}
+                      </span>
+                    </td>
+                  );
+                }
+                const rate = completionRate(habit, p.data);
+                return (
+                  <td key={p.key} className="text-center" style={{ paddingTop: 3, paddingBottom: 3 }}>
+                    <span className="tabular-nums" style={{ fontSize: 11, color: rateColor(rate) }}>
+                      {p.data.length ? `${Math.round(rate * 100)}%` : "—"}
+                    </span>
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * Progress tab — fetches 90 days of data and renders weekly or monthly habit
+ * completion rates for positive habits and raw occurrence counts for flags.
+ */
+function ProgressView() {
+  const [view, setView] = useState<"weekly" | "monthly">("weekly");
+  const [allEntries, setAllEntries] = useState<Entry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    fetch("/api/habits?days=90")
+      .then((r) => r.json())
+      .then((d: ApiResponse) => {
+        if (d.error) throw new Error(d.error);
+        setAllEntries(d.entries ?? []);
+      })
+      .catch((e: Error) => setErr(e.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const periods = useMemo(() => {
+    const grouped = view === "weekly" ? groupByWeek(allEntries) : groupByMonth(allEntries);
+    // Last 8 weeks or last 3 months
+    return view === "weekly" ? grouped.slice(-8) : grouped.slice(-3);
+  }, [view, allEntries]);
+
+  if (loading) return <p className="text-[11px] tracking-[0.2em] text-primary animate-pulse">loading...</p>;
+  if (err) return (
+    <div className="text-[12px] text-red-400 p-4 rounded bg-red-400/5 border border-red-400/20 tracking-wide">
+      <strong>error:</strong> {err}
+    </div>
+  );
+
+  return (
+    <div>
+      {/* Weekly / Monthly toggle */}
+      <div className="flex gap-1 mb-7">
+        {(["weekly", "monthly"] as const).map((v) => (
+          <button
+            key={v}
+            onClick={() => setView(v)}
+            className={`text-[10px] uppercase tracking-[0.15em] px-3 py-1 rounded border transition-colors ${
+              view === v
+                ? "border-border text-foreground bg-muted"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {v}
+          </button>
+        ))}
+      </div>
+
+      <SectionLabel>positive habits</SectionLabel>
+      <ProgressTable habits={POSITIVE} periods={periods} isFlag={false} />
+
+      <div className="mt-8">
+        <SectionLabel>watch list</SectionLabel>
+        <ProgressTable habits={FLAGS} periods={periods} isFlag={true} />
+      </div>
+    </div>
+  );
+}
+
 // --- Dashboard ---
 
 export default function Dashboard() {
@@ -344,6 +524,7 @@ export default function Dashboard() {
               <TabsTrigger value="streaks">Streaks</TabsTrigger>
               <TabsTrigger value="grid">Grid</TabsTrigger>
               <TabsTrigger value="flags">Flags</TabsTrigger>
+              <TabsTrigger value="progress">Progress</TabsTrigger>
             </TabsList>
 
             <TabsContent value="streaks">
@@ -356,6 +537,10 @@ export default function Dashboard() {
 
             <TabsContent value="flags">
               <FlagsView data={data} />
+            </TabsContent>
+
+            <TabsContent value="progress">
+              <ProgressView />
             </TabsContent>
           </Tabs>
         )}

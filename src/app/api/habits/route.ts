@@ -26,14 +26,15 @@ const ALL_HABITS = [...POSITIVE, ...FLAGS];
 /**
  * GET /api/habits
  *
- * Fetches the last 30 days of entries from the Notion habit tracker database
+ * Fetches the last N days of entries from the Notion habit tracker database
  * and returns a cleaned, flat JSON array ready for the dashboard to consume.
  *
+ * @param request - Incoming request; accepts optional `?days=N` query param (default 30, max 90).
  * @returns {{ entries: Array<{ date: string; [habit: string]: string | boolean }> }}
  *   `entries` — one object per Notion page, keyed by date and habit name.
  *   Habits not present in the Notion page default to `false`.
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const notion = new Client({ auth: process.env.NOTION_API_KEY });
     const dbId = process.env.NOTION_DB_ID;
@@ -44,8 +45,11 @@ export async function GET() {
 
     // --- Date range ---
 
+    const { searchParams } = new URL(request.url);
+    const days = Math.min(90, Math.max(1, parseInt(searchParams.get("days") ?? "30", 10) || 30));
+
     const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 30);
+    cutoff.setDate(cutoff.getDate() - days);
     const fromDate = cutoff.toISOString().split("T")[0];
 
     // --- Notion query ---
