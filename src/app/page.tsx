@@ -159,6 +159,42 @@ function rateBadgeVariant(r: number): "success" | "warning" | "danger" {
   return "danger";
 }
 
+/**
+ * Returns { count, target } for a habit within the current week (Mon–today)
+ * or current month (1st–today), derived from the 30-day entry array.
+ *
+ * @param habit   - Habit name to count.
+ * @param data    - Full 30-day entry array (already gap-filled).
+ * @param view    - "weekly" counts Mon–today; "monthly" counts 1st–today.
+ */
+function periodCount(
+  habit: string,
+  data: Entry[],
+  view: "weekly" | "monthly",
+): { count: number; target: number } {
+  const today = new Date();
+  const todayStr = today.toISOString().split("T")[0];
+
+  let fromStr: string;
+  let target: number;
+  const weeklyTarget = WEEKLY_TARGETS[habit] ?? 7;
+
+  if (view === "weekly") {
+    const mon = new Date(today);
+    mon.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+    fromStr = mon.toISOString().split("T")[0];
+    target = weeklyTarget;
+  } else {
+    fromStr = todayStr.slice(0, 7) + "-01";
+    const daysElapsed = today.getDate();
+    target = Math.round(weeklyTarget * (daysElapsed / 7));
+  }
+
+  const slice = data.filter((e) => e.date >= fromStr && e.date <= todayStr);
+  const count = slice.filter((e) => e[habit] === true).length;
+  return { count, target };
+}
+
 // --- Section label shared component ---
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -172,8 +208,60 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 // --- Streaks tab ---
 
 function StreaksView({ data }: { data: Entry[] }) {
+  const [countView, setCountView] = useState<"weekly" | "monthly">("weekly");
+
+  // Only habits with non-daily targets get count boxes
+  const trackedHabits = Object.keys(WEEKLY_TARGETS);
+
   return (
     <div>
+      {/* Count boxes for non-daily target habits */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <SectionLabel>targets</SectionLabel>
+          <div className="flex gap-1 mb-5">
+            {(["weekly", "monthly"] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setCountView(v)}
+                className={`text-[9px] uppercase tracking-[0.15em] px-2.5 py-1 rounded border transition-colors ${
+                  countView === v
+                    ? "border-border text-foreground bg-muted"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex gap-3">
+          {trackedHabits.map((habit) => {
+            const { count, target } = periodCount(habit, data, countView);
+            const rate = target > 0 ? Math.min(1, count / target) : 0;
+            const color = rateColor(rate);
+            const hit = count >= target;
+            return (
+              <div
+                key={habit}
+                className="flex-1 rounded border border-border p-3 flex flex-col gap-1"
+                style={{ background: hit ? "rgba(74,222,128,0.04)" : "transparent" }}
+              >
+                <span className="text-[9px] uppercase tracking-[0.15em] text-muted-foreground truncate">
+                  {habit}
+                </span>
+                <span className="tabular-nums font-medium" style={{ fontSize: 22, color }}>
+                  {count}
+                  <span className="text-muted-foreground" style={{ fontSize: 13, fontWeight: 400 }}>
+                    /{target}
+                  </span>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       <SectionLabel>positive habits</SectionLabel>
       <div className="space-y-3">
         {POSITIVE.map((habit) => {
