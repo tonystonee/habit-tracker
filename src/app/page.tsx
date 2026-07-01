@@ -55,45 +55,91 @@ function completionRate(key: string, data: Entry[]): number {
 
 type Period = { label: string; key: string; data: Entry[] };
 
+/** Returns a blank entry with all habits set to false. */
+function blankEntry(date: string): Entry {
+  const e: Entry = { date };
+  [...POSITIVE, ...FLAGS].forEach((h) => (e[h] = false));
+  return e;
+}
+
 /**
- * Groups `entries` into Monday-anchored ISO weeks.
+ * Merges duplicate Notion entries for the same date by OR-ing checkbox values,
+ * then returns a date-sorted, deduplicated array.
+ */
+function dedupeEntries(entries: Entry[]): Entry[] {
+  const byDate = new Map<string, Entry>();
+  for (const e of entries) {
+    if (!byDate.has(e.date)) {
+      byDate.set(e.date, { ...e });
+    } else {
+      const merged = byDate.get(e.date)!;
+      for (const key of Object.keys(e)) {
+        if (key !== "date" && e[key] === true) merged[key] = true;
+      }
+    }
+  }
+  return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * Groups entries into Monday-anchored ISO weeks, filling every day Mon–Sun
+ * (capped at today) so the denominator always reflects the full week.
  * Returns periods sorted oldest → newest.
  */
 function groupByWeek(entries: Entry[]): Period[] {
-  const weeks = new Map<string, Entry[]>();
-  for (const e of entries) {
+  const deduped = dedupeEntries(entries);
+  const byDate = new Map(deduped.map((e) => [e.date, e]));
+  const todayStr = new Date().toISOString().split("T")[0];
+
+  const weekKeys = new Set<string>();
+  for (const e of deduped) {
     const d = new Date(e.date + "T12:00:00");
     const mon = new Date(d);
-    // +6 % 7 converts Sun=0 … Sat=6 → Mon=0 … Sun=6, then we step back to Monday
+    // +6 % 7 maps Sun=0…Sat=6 → Mon=0…Sun=6, stepping back to Monday
     mon.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-    const key = mon.toISOString().split("T")[0];
-    if (!weeks.has(key)) weeks.set(key, []);
-    weeks.get(key)!.push(e);
+    weekKeys.add(mon.toISOString().split("T")[0]);
   }
-  return Array.from(weeks.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, data]) => {
-      const d = new Date(key + "T12:00:00");
-      const label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+  return Array.from(weekKeys)
+    .sort()
+    .map((key) => {
+      const data: Entry[] = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(key + "T12:00:00");
+        d.setDate(d.getDate() + i);
+        const dateStr = d.toISOString().split("T")[0];
+        if (dateStr > todayStr) break;
+        data.push(byDate.get(dateStr) ?? blankEntry(dateStr));
+      }
+      const label = new Date(key + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
       return { label, key, data };
     });
 }
 
 /**
- * Groups `entries` into calendar months (YYYY-MM).
+ * Groups entries into calendar months, filling every day of the month
+ * (capped at today) so the denominator always reflects the full month.
  * Returns periods sorted oldest → newest.
  */
 function groupByMonth(entries: Entry[]): Period[] {
-  const months = new Map<string, Entry[]>();
-  for (const e of entries) {
-    const key = e.date.slice(0, 7);
-    if (!months.has(key)) months.set(key, []);
-    months.get(key)!.push(e);
-  }
-  return Array.from(months.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, data]) => {
+  const deduped = dedupeEntries(entries);
+  const byDate = new Map(deduped.map((e) => [e.date, e]));
+  const todayStr = new Date().toISOString().split("T")[0];
+
+  const monthKeys = new Set<string>();
+  for (const e of deduped) monthKeys.add(e.date.slice(0, 7));
+
+  return Array.from(monthKeys)
+    .sort()
+    .map((key) => {
       const [y, m] = key.split("-").map(Number);
+      const daysInMonth = new Date(y, m, 0).getDate();
+      const data: Entry[] = [];
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${key}-${String(day).padStart(2, "0")}`;
+        if (dateStr > todayStr) break;
+        data.push(byDate.get(dateStr) ?? blankEntry(dateStr));
+      }
       const label = new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "short", year: "2-digit" });
       return { label, key, data };
     });
