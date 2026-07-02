@@ -15,6 +15,15 @@ type ApiResponse = { entries?: Entry[]; error?: string };
 
 // --- Helpers ---
 
+/** Formats a Date as YYYY-MM-DD using the browser's local calendar, not UTC. */
+function localDateStr(d: Date): string {
+  return [
+    d.getFullYear(),
+    String(d.getMonth() + 1).padStart(2, "0"),
+    String(d.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
 /**
  * Fills in a continuous 30-day window ending today, backfilling missing dates
  * with all-false entries so streaks and grids always span a full month.
@@ -24,7 +33,7 @@ function buildRange(raw: Entry[]): Entry[] {
   return Array.from({ length: 30 }, (_, i) => {
     const d = new Date(today);
     d.setDate(d.getDate() - (29 - i));
-    const date = d.toISOString().split("T")[0];
+    const date = localDateStr(d);
     const found = raw.find((e) => e.date === date);
     if (found) return found;
     const blank: Entry = { date };
@@ -89,7 +98,7 @@ function dedupeEntries(entries: Entry[]): Entry[] {
 function groupByWeek(entries: Entry[]): Period[] {
   const deduped = dedupeEntries(entries);
   const byDate = new Map(deduped.map((e) => [e.date, e]));
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = localDateStr(new Date());
 
   const weekKeys = new Set<string>();
   for (const e of deduped) {
@@ -97,7 +106,7 @@ function groupByWeek(entries: Entry[]): Period[] {
     const mon = new Date(d);
     // +6 % 7 maps Sun=0…Sat=6 → Mon=0…Sun=6, stepping back to Monday
     mon.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-    weekKeys.add(mon.toISOString().split("T")[0]);
+    weekKeys.add(localDateStr(mon));
   }
 
   return Array.from(weekKeys)
@@ -107,7 +116,7 @@ function groupByWeek(entries: Entry[]): Period[] {
       for (let i = 0; i < 7; i++) {
         const d = new Date(key + "T12:00:00");
         d.setDate(d.getDate() + i);
-        const dateStr = d.toISOString().split("T")[0];
+        const dateStr = localDateStr(d);
         if (dateStr > todayStr) break;
         data.push(byDate.get(dateStr) ?? blankEntry(dateStr));
       }
@@ -124,7 +133,7 @@ function groupByWeek(entries: Entry[]): Period[] {
 function groupByMonth(entries: Entry[]): Period[] {
   const deduped = dedupeEntries(entries);
   const byDate = new Map(deduped.map((e) => [e.date, e]));
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = localDateStr(new Date());
 
   const monthKeys = new Set<string>();
   for (const e of deduped) monthKeys.add(e.date.slice(0, 7));
@@ -173,7 +182,7 @@ function periodCount(
   view: "weekly" | "monthly",
 ): { count: number; target: number } {
   const today = new Date();
-  const todayStr = today.toISOString().split("T")[0];
+  const todayStr = localDateStr(today);
 
   let fromStr: string;
   let target: number;
@@ -182,7 +191,7 @@ function periodCount(
   if (view === "weekly") {
     const mon = new Date(today);
     mon.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-    fromStr = mon.toISOString().split("T")[0];
+    fromStr = localDateStr(mon);
     target = weeklyTarget;
   } else {
     fromStr = todayStr.slice(0, 7) + "-01";
@@ -206,6 +215,72 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 // --- Streaks tab ---
+
+/**
+ * Read-only snapshot of today's habit completion, shown under the target boxes.
+ * Derives today's state from the last entry in the 30-day `data` array.
+ */
+function TodaySnapshot({ data }: { data: Entry[] }) {
+  const today = data[data.length - 1];
+  if (!today) return null;
+
+  const donePct = POSITIVE.length
+    ? Math.round((POSITIVE.filter((h) => today[h] === true).length / POSITIVE.length) * 100)
+    : 0;
+  const flaggedCount = FLAGS.filter((h) => today[h] === true).length;
+
+  return (
+    <div className="mb-8 rounded border border-border p-4">
+      <div className="flex items-baseline justify-between mb-4">
+        <p className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground">today</p>
+        <span
+          className="text-[11px] tabular-nums"
+          style={{ color: donePct === 100 ? "#4ade80" : donePct >= 50 ? "#facc15" : "#6b7280" }}
+        >
+          {donePct}%
+        </span>
+      </div>
+
+      {/* Positive habits */}
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {POSITIVE.map((habit) => {
+          const done = today[habit] === true;
+          return (
+            <span
+              key={habit}
+              className="text-[9px] uppercase tracking-[0.12em] px-2 py-0.5 rounded border"
+              style={{
+                color: done ? "#4ade80" : "#444",
+                borderColor: done ? "#166534" : "#262626",
+                background: done ? "rgba(74,222,128,0.06)" : "transparent",
+              }}
+            >
+              {habit}
+            </span>
+          );
+        })}
+      </div>
+
+      {/* Watch list */}
+      {flaggedCount > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {FLAGS.filter((h) => today[h] === true).map((habit) => (
+            <span
+              key={habit}
+              className="text-[9px] uppercase tracking-[0.12em] px-2 py-0.5 rounded border"
+              style={{ color: "#f87171", borderColor: "#991b1b", background: "rgba(248,113,113,0.06)" }}
+            >
+              {habit}
+            </span>
+          ))}
+        </div>
+      )}
+      {flaggedCount === 0 && (
+        <p className="text-[9px] uppercase tracking-[0.15em] text-muted-foreground/40">watch list · clean</p>
+      )}
+    </div>
+  );
+}
 
 function StreaksView({ data }: { data: Entry[] }) {
   const [countView, setCountView] = useState<"weekly" | "monthly">("weekly");
@@ -261,6 +336,9 @@ function StreaksView({ data }: { data: Entry[] }) {
           })}
         </div>
       </div>
+
+      {/* Today's snapshot */}
+      <TodaySnapshot data={data} />
 
       <SectionLabel>positive habits</SectionLabel>
       <div className="space-y-3">
