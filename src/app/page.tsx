@@ -266,7 +266,6 @@ function TodaySnapshot() {
   const donePct = POSITIVE.length
     ? Math.round((POSITIVE.filter((h) => habits[h]).length / POSITIVE.length) * 100)
     : 0;
-  const flaggedCount = FLAGS.filter((h) => habits[h]).length;
 
   return (
     <div className="mb-8 rounded border border-border p-4">
@@ -304,32 +303,6 @@ function TodaySnapshot() {
         })}
       </div>
 
-      {/* Watch list */}
-      <div className="flex flex-wrap gap-1.5">
-        {FLAGS.map((habit) => {
-          const flagged = habits[habit] === true;
-          const busy = saving.has(habit);
-          return (
-            <button
-              key={habit}
-              onClick={() => toggle(habit)}
-              disabled={busy}
-              className="text-[9px] uppercase tracking-[0.12em] px-2 py-0.5 rounded border transition-all duration-200 cursor-pointer"
-              style={{
-                color: flagged ? "#f87171" : "#555",
-                borderColor: flagged ? "#991b1b" : "#2a2a2a",
-                background: flagged ? "rgba(248,113,113,0.06)" : "transparent",
-                opacity: busy ? 0.5 : 1,
-              }}
-            >
-              {habit}
-            </button>
-          );
-        })}
-      </div>
-      {flaggedCount === 0 && (
-        <p className="text-[9px] uppercase tracking-[0.15em] text-muted-foreground/40 mt-2">watch list · clean</p>
-      )}
     </div>
   );
 }
