@@ -15,6 +15,15 @@ type ApiResponse = { entries?: Entry[]; error?: string };
 
 // --- Helpers ---
 
+/** Formats a Date as YYYY-MM-DD using the browser's local calendar, not UTC. */
+function localDateStr(d: Date): string {
+  return [
+    d.getFullYear(),
+    String(d.getMonth() + 1).padStart(2, "0"),
+    String(d.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
 /**
  * Fills in a continuous 30-day window ending today, backfilling missing dates
  * with all-false entries so streaks and grids always span a full month.
@@ -24,7 +33,7 @@ function buildRange(raw: Entry[]): Entry[] {
   return Array.from({ length: 30 }, (_, i) => {
     const d = new Date(today);
     d.setDate(d.getDate() - (29 - i));
-    const date = d.toISOString().split("T")[0];
+    const date = localDateStr(d);
     const found = raw.find((e) => e.date === date);
     if (found) return found;
     const blank: Entry = { date };
@@ -89,7 +98,7 @@ function dedupeEntries(entries: Entry[]): Entry[] {
 function groupByWeek(entries: Entry[]): Period[] {
   const deduped = dedupeEntries(entries);
   const byDate = new Map(deduped.map((e) => [e.date, e]));
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = localDateStr(new Date());
 
   const weekKeys = new Set<string>();
   for (const e of deduped) {
@@ -97,7 +106,7 @@ function groupByWeek(entries: Entry[]): Period[] {
     const mon = new Date(d);
     // +6 % 7 maps Sun=0…Sat=6 → Mon=0…Sun=6, stepping back to Monday
     mon.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-    weekKeys.add(mon.toISOString().split("T")[0]);
+    weekKeys.add(localDateStr(mon));
   }
 
   return Array.from(weekKeys)
@@ -107,7 +116,7 @@ function groupByWeek(entries: Entry[]): Period[] {
       for (let i = 0; i < 7; i++) {
         const d = new Date(key + "T12:00:00");
         d.setDate(d.getDate() + i);
-        const dateStr = d.toISOString().split("T")[0];
+        const dateStr = localDateStr(d);
         if (dateStr > todayStr) break;
         data.push(byDate.get(dateStr) ?? blankEntry(dateStr));
       }
@@ -124,7 +133,7 @@ function groupByWeek(entries: Entry[]): Period[] {
 function groupByMonth(entries: Entry[]): Period[] {
   const deduped = dedupeEntries(entries);
   const byDate = new Map(deduped.map((e) => [e.date, e]));
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = localDateStr(new Date());
 
   const monthKeys = new Set<string>();
   for (const e of deduped) monthKeys.add(e.date.slice(0, 7));
@@ -173,7 +182,7 @@ function periodCount(
   view: "weekly" | "monthly",
 ): { count: number; target: number } {
   const today = new Date();
-  const todayStr = today.toISOString().split("T")[0];
+  const todayStr = localDateStr(today);
 
   let fromStr: string;
   let target: number;
@@ -182,7 +191,7 @@ function periodCount(
   if (view === "weekly") {
     const mon = new Date(today);
     mon.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-    fromStr = mon.toISOString().split("T")[0];
+    fromStr = localDateStr(mon);
     target = weeklyTarget;
   } else {
     fromStr = todayStr.slice(0, 7) + "-01";
@@ -206,6 +215,97 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 // --- Streaks tab ---
+
+/**
+ * Interactive snapshot of today's habit completion shown under the target boxes.
+ * Fetches its own state from /api/today so it stays in sync with the today page,
+ * and allows toggling individual habits via PATCH without leaving the dashboard.
+ */
+function TodaySnapshot() {
+  const [habits, setHabits] = useState<Record<string, boolean>>({});
+  const [pageId, setPageId] = useState<string | null>(null);
+  const [saving, setSaving] = useState<Set<string>>(new Set());
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    const date = new Date().toLocaleDateString("en-CA");
+    fetch(`/api/today?date=${date}`)
+      .then((r) => r.json())
+      .then((d: { pageId?: string | null; habits?: Record<string, boolean> }) => {
+        setPageId(d.pageId ?? null);
+        setHabits(d.habits ?? {});
+        setLoaded(true);
+      });
+  }, []);
+
+  async function toggle(habit: string) {
+    const next = !habits[habit];
+    setHabits((prev) => ({ ...prev, [habit]: next }));
+    setSaving((prev) => new Set(prev).add(habit));
+    try {
+      const res = await fetch("/api/today", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pageId, habit, checked: next, date: new Date().toLocaleDateString("en-CA") }),
+      });
+      const data = (await res.json()) as { ok?: boolean; pageId?: string };
+      if (data.pageId && !pageId) setPageId(data.pageId);
+    } catch {
+      setHabits((prev) => ({ ...prev, [habit]: !next }));
+    } finally {
+      setSaving((prev) => { const s = new Set(prev); s.delete(habit); return s; });
+    }
+  }
+
+  if (!loaded) return (
+    <div className="mb-8 rounded border border-border p-4">
+      <p className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground animate-pulse">today</p>
+    </div>
+  );
+
+  const donePct = POSITIVE.length
+    ? Math.round((POSITIVE.filter((h) => habits[h]).length / POSITIVE.length) * 100)
+    : 0;
+
+  return (
+    <div className="mb-8 rounded border border-border p-4">
+      <div className="flex items-baseline justify-between mb-4">
+        <p className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground">today</p>
+        <span
+          className="text-[11px] tabular-nums"
+          style={{ color: donePct === 100 ? "#4ade80" : donePct >= 50 ? "#facc15" : "#6b7280" }}
+        >
+          {donePct}%
+        </span>
+      </div>
+
+      {/* Positive habits */}
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {POSITIVE.map((habit) => {
+          const done = habits[habit] === true;
+          const busy = saving.has(habit);
+          return (
+            <button
+              key={habit}
+              onClick={() => toggle(habit)}
+              disabled={busy}
+              className="text-[9px] uppercase tracking-[0.12em] px-2 py-0.5 rounded border transition-all duration-200 cursor-pointer"
+              style={{
+                color: done ? "#4ade80" : "#555",
+                borderColor: done ? "#166534" : "#2a2a2a",
+                background: done ? "rgba(74,222,128,0.06)" : "transparent",
+                opacity: busy ? 0.5 : 1,
+              }}
+            >
+              {habit}
+            </button>
+          );
+        })}
+      </div>
+
+    </div>
+  );
+}
 
 function StreaksView({ data }: { data: Entry[] }) {
   const [countView, setCountView] = useState<"weekly" | "monthly">("weekly");
@@ -261,6 +361,9 @@ function StreaksView({ data }: { data: Entry[] }) {
           })}
         </div>
       </div>
+
+      {/* Today's snapshot */}
+      <TodaySnapshot />
 
       <SectionLabel>positive habits</SectionLabel>
       <div className="space-y-3">
