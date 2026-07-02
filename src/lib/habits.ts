@@ -12,6 +12,8 @@ export const FLAGS = [
   "Doomscrolling",
   "Impulse Purchase",
   "Junk Food / Late Night Eating",
+  "🍆",
+  "🌽",
 ];
 
 export const ALL_HABITS = [...POSITIVE, ...FLAGS];
