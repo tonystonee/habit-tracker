@@ -217,17 +217,56 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 // --- Streaks tab ---
 
 /**
- * Read-only snapshot of today's habit completion, shown under the target boxes.
- * Derives today's state from the last entry in the 30-day `data` array.
+ * Interactive snapshot of today's habit completion shown under the target boxes.
+ * Fetches its own state from /api/today so it stays in sync with the today page,
+ * and allows toggling individual habits via PATCH without leaving the dashboard.
  */
-function TodaySnapshot({ data }: { data: Entry[] }) {
-  const today = data[data.length - 1];
-  if (!today) return null;
+function TodaySnapshot() {
+  const [habits, setHabits] = useState<Record<string, boolean>>({});
+  const [pageId, setPageId] = useState<string | null>(null);
+  const [saving, setSaving] = useState<Set<string>>(new Set());
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    const date = new Date().toLocaleDateString("en-CA");
+    fetch(`/api/today?date=${date}`)
+      .then((r) => r.json())
+      .then((d: { pageId?: string | null; habits?: Record<string, boolean> }) => {
+        setPageId(d.pageId ?? null);
+        setHabits(d.habits ?? {});
+        setLoaded(true);
+      });
+  }, []);
+
+  async function toggle(habit: string) {
+    const next = !habits[habit];
+    setHabits((prev) => ({ ...prev, [habit]: next }));
+    setSaving((prev) => new Set(prev).add(habit));
+    try {
+      const res = await fetch("/api/today", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pageId, habit, checked: next, date: new Date().toLocaleDateString("en-CA") }),
+      });
+      const data = (await res.json()) as { ok?: boolean; pageId?: string };
+      if (data.pageId && !pageId) setPageId(data.pageId);
+    } catch {
+      setHabits((prev) => ({ ...prev, [habit]: !next }));
+    } finally {
+      setSaving((prev) => { const s = new Set(prev); s.delete(habit); return s; });
+    }
+  }
+
+  if (!loaded) return (
+    <div className="mb-8 rounded border border-border p-4">
+      <p className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground animate-pulse">today</p>
+    </div>
+  );
 
   const donePct = POSITIVE.length
-    ? Math.round((POSITIVE.filter((h) => today[h] === true).length / POSITIVE.length) * 100)
+    ? Math.round((POSITIVE.filter((h) => habits[h]).length / POSITIVE.length) * 100)
     : 0;
-  const flaggedCount = FLAGS.filter((h) => today[h] === true).length;
+  const flaggedCount = FLAGS.filter((h) => habits[h]).length;
 
   return (
     <div className="mb-8 rounded border border-border p-4">
@@ -244,39 +283,52 @@ function TodaySnapshot({ data }: { data: Entry[] }) {
       {/* Positive habits */}
       <div className="flex flex-wrap gap-1.5 mb-3">
         {POSITIVE.map((habit) => {
-          const done = today[habit] === true;
+          const done = habits[habit] === true;
+          const busy = saving.has(habit);
           return (
-            <span
+            <button
               key={habit}
-              className="text-[9px] uppercase tracking-[0.12em] px-2 py-0.5 rounded border"
+              onClick={() => toggle(habit)}
+              disabled={busy}
+              className="text-[9px] uppercase tracking-[0.12em] px-2 py-0.5 rounded border transition-all duration-200 cursor-pointer"
               style={{
-                color: done ? "#4ade80" : "#444",
-                borderColor: done ? "#166534" : "#262626",
+                color: done ? "#4ade80" : "#555",
+                borderColor: done ? "#166534" : "#2a2a2a",
                 background: done ? "rgba(74,222,128,0.06)" : "transparent",
+                opacity: busy ? 0.5 : 1,
               }}
             >
               {habit}
-            </span>
+            </button>
           );
         })}
       </div>
 
       {/* Watch list */}
-      {flaggedCount > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {FLAGS.filter((h) => today[h] === true).map((habit) => (
-            <span
+      <div className="flex flex-wrap gap-1.5">
+        {FLAGS.map((habit) => {
+          const flagged = habits[habit] === true;
+          const busy = saving.has(habit);
+          return (
+            <button
               key={habit}
-              className="text-[9px] uppercase tracking-[0.12em] px-2 py-0.5 rounded border"
-              style={{ color: "#f87171", borderColor: "#991b1b", background: "rgba(248,113,113,0.06)" }}
+              onClick={() => toggle(habit)}
+              disabled={busy}
+              className="text-[9px] uppercase tracking-[0.12em] px-2 py-0.5 rounded border transition-all duration-200 cursor-pointer"
+              style={{
+                color: flagged ? "#f87171" : "#555",
+                borderColor: flagged ? "#991b1b" : "#2a2a2a",
+                background: flagged ? "rgba(248,113,113,0.06)" : "transparent",
+                opacity: busy ? 0.5 : 1,
+              }}
             >
               {habit}
-            </span>
-          ))}
-        </div>
-      )}
+            </button>
+          );
+        })}
+      </div>
       {flaggedCount === 0 && (
-        <p className="text-[9px] uppercase tracking-[0.15em] text-muted-foreground/40">watch list · clean</p>
+        <p className="text-[9px] uppercase tracking-[0.15em] text-muted-foreground/40 mt-2">watch list · clean</p>
       )}
     </div>
   );
@@ -338,7 +390,7 @@ function StreaksView({ data }: { data: Entry[] }) {
       </div>
 
       {/* Today's snapshot */}
-      <TodaySnapshot data={data} />
+      <TodaySnapshot />
 
       <SectionLabel>positive habits</SectionLabel>
       <div className="space-y-3">
