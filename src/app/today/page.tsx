@@ -143,7 +143,8 @@ export default function TodayPage() {
   const [flashing, setFlashing] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    fetch("/api/today")
+    const localDate = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local tz
+    fetch(`/api/today?date=${localDate}`)
       .then((r) => r.json())
       .then((d: ApiResponse) => {
         if (d.error) throw new Error(d.error);
@@ -174,7 +175,7 @@ export default function TodayPage() {
       const res = await fetch("/api/today", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pageId, habit, checked: next }),
+        body: JSON.stringify({ pageId, habit, checked: next, date: new Date().toLocaleDateString("en-CA") }),
       });
 
       const data = (await res.json()) as { ok?: boolean; pageId?: string; error?: string };

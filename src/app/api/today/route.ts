@@ -27,7 +27,20 @@ function getNotion() {
   return new Client({ auth: process.env.NOTION_API_KEY });
 }
 
-function todayISO() {
+/**
+ * Returns today's date in YYYY-MM-DD, preferring the `date` query param sent
+ * by the client (local calendar date) so server UTC never drifts from the
+ * user's actual day.
+ */
+function todayISO(searchParams?: URLSearchParams): string {
+  const clientDate = searchParams?.get("date");
+  if (clientDate && /^\d{4}-\d{2}-\d{2}$/.test(clientDate)) return clientDate;
+  // Fallback: derive local date from offset header if available
+  const offset = searchParams?.get("offset");
+  if (offset !== null && offset !== undefined) {
+    const ms = new Date().getTime() - Number(offset) * 60000;
+    return new Date(ms).toISOString().split("T")[0];
+  }
   return new Date().toISOString().split("T")[0];
 }
 
@@ -41,7 +54,7 @@ function todayISO() {
  *
  * @returns {{ pageId: string | null; habits: Record<string, boolean> }}
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const notion = getNotion();
     const dbId = process.env.NOTION_DB_ID;
@@ -50,7 +63,7 @@ export async function GET() {
       return NextResponse.json({ error: "NOTION_DB_ID is not configured" }, { status: 500 });
     }
 
-    const today = todayISO();
+    const today = todayISO(request.nextUrl.searchParams);
 
     const res = await notion.databases.query({
       database_id: dbId,
@@ -89,7 +102,7 @@ export async function GET() {
  * Toggles a single habit checkbox on today's Notion page.
  * If no page exists yet for today, one is created first.
  *
- * @param request - JSON body: `{ pageId: string | null; habit: string; checked: boolean }`
+ * @param request - JSON body: `{ pageId: string | null; habit: string; checked: boolean; date?: string }`
  * @returns {{ ok: true; pageId: string }} on success
  */
 export async function PATCH(request: NextRequest) {
@@ -105,10 +118,12 @@ export async function PATCH(request: NextRequest) {
       pageId: string | null;
       habit: string;
       checked: boolean;
+      date?: string;
     };
 
     const { habit, checked } = body;
     let { pageId } = body;
+    const clientDate = body.date && /^\d{4}-\d{2}-\d{2}$/.test(body.date) ? body.date : null;
 
     if (!ALL_HABITS.includes(habit)) {
       return NextResponse.json({ error: `Unknown habit: ${habit}` }, { status: 400 });
@@ -116,7 +131,7 @@ export async function PATCH(request: NextRequest) {
 
     // Create today's page if it doesn't exist yet
     if (!pageId) {
-      const today = todayISO();
+      const today = clientDate ?? todayISO();
       const created = await notion.pages.create({
         parent: { database_id: dbId },
         properties: {
