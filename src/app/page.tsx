@@ -831,6 +831,15 @@ function LogView({ data }: { data: Entry[] }) {
 
 // --- Habits tab ---
 
+/** Formats a Monday week-start key as "Jun 29 – Jul 5". */
+function weekRangeLabel(mondayKey: string): string {
+  const start = new Date(mondayKey + "T12:00:00");
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return `${fmt(start)} – ${fmt(end)}`;
+}
+
 /**
  * One-row-per-habit summary table: current streak, a tally over the
  * selected window, and a status badge. Positive habits track a "done"
@@ -838,34 +847,77 @@ function LogView({ data }: { data: Entry[] }) {
  * against occurrence count. Rows alternate bg-background / bg-muted, with
  * a divider between the two habit groups (mirrors the Grid tab's layout).
  *
- * The weekly/monthly toggle only changes the tally window (last 7 vs all
- * 30 days) — the streak column always reflects the true current streak,
- * since a streak isn't meaningfully bounded by an arbitrary window.
+ * The streak column always reflects the true current streak (against the
+ * last 30 days from `data`), independent of the selected window. Monthly
+ * mode tallies the same last 30 days; weekly mode tallies a single
+ * Monday-anchored calendar week — matching how Streaks/Progress define
+ * "this week" — paginated via its own 90-day fetch so past weeks are browsable.
  */
 function HabitsView({ data }: { data: Entry[] }) {
   const [view, setView] = useState<"weekly" | "monthly">("monthly");
+  const [weekEntries, setWeekEntries] = useState<Entry[]>([]);
+  const [weekIndex, setWeekIndex] = useState(-1); // -1 = latest week, set once loaded
   const all = [...POSITIVE, ...FLAGS];
-  const windowData = view === "weekly" ? data.slice(-7) : data;
-  const windowLabel = view === "weekly" ? "7 Days" : "30 Days";
+
+  useEffect(() => {
+    fetch("/api/habits?days=90")
+      .then((r) => r.json())
+      .then((d: ApiResponse) => setWeekEntries(d.entries ?? []))
+      .catch(() => setWeekEntries([]));
+  }, []);
+
+  const weeks = useMemo(() => groupByWeek(weekEntries), [weekEntries]);
+  const idx = weekIndex === -1 ? weeks.length - 1 : Math.min(weekIndex, weeks.length - 1);
+  const selectedWeek = weeks[idx];
+
+  const windowData = view === "weekly" ? (selectedWeek?.data ?? []) : data;
+  const windowLabel = view === "weekly" ? "Week" : "30 Days";
 
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
         <SectionLabel>habits</SectionLabel>
-        <div className="flex gap-1 mb-5">
-          {(["weekly", "monthly"] as const).map((v) => (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              className={`text-[9px] uppercase tracking-[0.15em] px-2.5 py-1 rounded border transition-colors ${
-                view === v
-                  ? "border-border text-foreground bg-muted"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {v}
-            </button>
-          ))}
+        <div className="flex items-center gap-3 mb-5">
+          {view === "weekly" && weeks.length > 0 && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setWeekIndex(idx - 1)}
+                disabled={idx <= 0}
+                className="text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                style={{ fontSize: 12 }}
+                aria-label="Previous week"
+              >
+                ‹
+              </button>
+              <span className="text-muted-foreground tabular-nums whitespace-nowrap" style={{ fontSize: 10 }}>
+                {selectedWeek ? weekRangeLabel(selectedWeek.key) : ""}
+              </span>
+              <button
+                onClick={() => setWeekIndex(idx + 1)}
+                disabled={idx >= weeks.length - 1}
+                className="text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                style={{ fontSize: 12 }}
+                aria-label="Next week"
+              >
+                ›
+              </button>
+            </div>
+          )}
+          <div className="flex gap-1">
+            {(["weekly", "monthly"] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`text-[9px] uppercase tracking-[0.15em] px-2.5 py-1 rounded border transition-colors ${
+                  view === v
+                    ? "border-border text-foreground bg-muted"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
       <div className="overflow-x-auto rounded border border-border">
