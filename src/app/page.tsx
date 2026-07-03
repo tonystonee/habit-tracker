@@ -7,7 +7,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { POSITIVE, FLAGS, WEEKLY_TARGETS } from "@/lib/habits";
+import { POSITIVE, FLAGS, WEEKLY_TARGETS, habitLabel, HABIT_EMOJI } from "@/lib/habits";
 
 // Habits shown in the daily check-in snapshot (excludes non-daily tracked habits)
 const DAILY_HABITS = POSITIVE.filter((h) => h !== "Weekly Money Review");
@@ -303,7 +303,7 @@ function TodaySnapshot() {
                 opacity: busy ? 0.5 : 1,
               }}
             >
-              {habit}
+              {habitLabel(habit)}
             </button>
           );
         })}
@@ -404,7 +404,7 @@ function WeeklyReviewCountBox({ count, target, todayAlreadyDone, countView }: We
           className="text-[9px] uppercase tracking-[0.15em] truncate"
           style={{ color: needsAction ? "#fbbf24" : "hsl(var(--muted-foreground))" }}
         >
-          Weekly Money Review
+          {habitLabel("Weekly Money Review")}
         </span>
       </div>
       <span className="tabular-nums font-medium" style={{ fontSize: 22, color }}>
@@ -497,7 +497,7 @@ function StreaksView({ data }: { data: Entry[] }) {
                 style={{ background: hit ? "rgba(74,222,128,0.04)" : "transparent" }}
               >
                 <span className="text-[9px] uppercase tracking-[0.15em] text-muted-foreground truncate">
-                  {habit}
+                  {habitLabel(habit)}
                 </span>
                 <span className="tabular-nums font-medium" style={{ fontSize: 22, color }}>
                   {count}
@@ -523,7 +523,7 @@ function StreaksView({ data }: { data: Entry[] }) {
           return (
             <div key={habit} className="flex items-center gap-3">
               <span className="text-[11px] uppercase tracking-wide text-muted-foreground w-44 shrink-0 truncate">
-                {habit}
+                {habitLabel(habit)}
               </span>
 
               {/* Progress bar */}
@@ -603,7 +603,7 @@ function GridView({ data }: { data: Entry[] }) {
                     className="text-muted-foreground"
                     style={{ fontSize: 10, textAlign: "right", paddingRight: 10, whiteSpace: "nowrap", verticalAlign: "middle" }}
                   >
-                    {habit}
+                    {habitLabel(habit)}
                   </td>
                   {data.map((e) => {
                     const on = e[habit] === true;
@@ -627,6 +627,9 @@ function GridView({ data }: { data: Entry[] }) {
                       </td>
                     );
                   })}
+                  <td style={{ paddingLeft: 8, fontSize: 12, verticalAlign: "middle" }}>
+                    {HABIT_EMOJI[habit] ?? ""}
+                  </td>
                 </tr>
               </Fragment>
             );
@@ -683,7 +686,7 @@ function FlagsView({ data }: { data: Entry[] }) {
                 />
 
                 <span className="text-[11px] uppercase tracking-wide text-muted-foreground flex-1 truncate">
-                  {flag}
+                  {habitLabel(flag)}
                 </span>
 
                 <Badge variant={isClean ? "success" : "danger"}>
@@ -804,7 +807,7 @@ function ProgressTable({ habits, periods, isFlag }: { habits: string[]; periods:
                 className="text-left text-foreground px-4 py-2 whitespace-nowrap"
                 style={{ fontSize: 11 }}
               >
-                {habit}
+                {habitLabel(habit)}
               </td>
               {periods.map((p) => {
                 if (isFlag) {
