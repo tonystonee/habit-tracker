@@ -2,9 +2,11 @@
 
 import { Fragment, useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
+import { BellRing } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { POSITIVE, FLAGS, WEEKLY_TARGETS } from "@/lib/habits";
 
 // Habits shown in the daily check-in snapshot (excludes non-daily tracked habits)
@@ -375,29 +377,60 @@ function WeeklyReviewCountBox({ count, target, todayAlreadyDone, countView }: We
   const color = rateColor(rate);
   const hit = displayCount >= target;
 
+  // In weekly mode, alert when the review hasn't been done yet this week
+  const needsAction = countView === "weekly" && loaded && !checked;
+
   return (
     <div
-      className="flex-1 rounded border border-border p-3 flex flex-col gap-1"
-      style={{ background: hit ? "rgba(74,222,128,0.04)" : "transparent" }}
+      className="flex-1 rounded border p-3 flex flex-col gap-1 transition-colors"
+      style={{
+        borderColor: needsAction ? "rgba(251,191,36,0.5)" : hit ? "#166534" : "hsl(var(--border))",
+        background: needsAction
+          ? "rgba(251,191,36,0.04)"
+          : hit
+          ? "rgba(74,222,128,0.04)"
+          : "transparent",
+      }}
     >
-      <span className="text-[9px] uppercase tracking-[0.15em] text-muted-foreground truncate">
-        Weekly Money Review
-      </span>
+      <div className="flex items-center gap-1.5">
+        {needsAction && (
+          <BellRing
+            size={10}
+            className="shrink-0 animate-pulse"
+            style={{ color: "#fbbf24" }}
+          />
+        )}
+        <span
+          className="text-[9px] uppercase tracking-[0.15em] truncate"
+          style={{ color: needsAction ? "#fbbf24" : "hsl(var(--muted-foreground))" }}
+        >
+          Weekly Money Review
+        </span>
+      </div>
       <span className="tabular-nums font-medium" style={{ fontSize: 22, color }}>
         {displayCount}
         <span className="text-muted-foreground" style={{ fontSize: 13, fontWeight: 400 }}>
           /{target}
         </span>
       </span>
+      {needsAction && (
+        <span className="text-[8px] uppercase tracking-[0.12em]" style={{ color: "#fbbf24" }}>
+          needs to be done
+        </span>
+      )}
       {countView === "weekly" && (
         <button
           onClick={toggle}
           disabled={!loaded || saving}
           className="mt-1 text-[8px] uppercase tracking-[0.12em] px-2 py-0.5 rounded border transition-all duration-200 cursor-pointer text-left"
           style={{
-            color: checked ? "#4ade80" : "#555",
-            borderColor: checked ? "#166534" : "#2a2a2a",
-            background: checked ? "rgba(74,222,128,0.06)" : "transparent",
+            color: checked ? "#4ade80" : needsAction ? "#fbbf24" : "#555",
+            borderColor: checked ? "#166534" : needsAction ? "rgba(251,191,36,0.4)" : "#2a2a2a",
+            background: checked
+              ? "rgba(74,222,128,0.06)"
+              : needsAction
+              ? "rgba(251,191,36,0.06)"
+              : "transparent",
             opacity: !loaded || saving ? 0.5 : 1,
           }}
         >
@@ -833,13 +866,16 @@ export default function Dashboard() {
       <div className="max-w-4xl mx-auto">
 
         {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-sm font-medium tracking-[0.3em] uppercase text-primary mb-1.5">
-            habit tracker
-          </h1>
-          <p className="text-[11px] text-muted-foreground tracking-wide">
-            {rangeLabel} · {raw.length} entries
-          </p>
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <h1 className="text-sm font-medium tracking-[0.3em] uppercase text-primary mb-1.5">
+              habit tracker
+            </h1>
+            <p className="text-[11px] text-muted-foreground tracking-wide">
+              {rangeLabel} · {raw.length} entries
+            </p>
+          </div>
+          <ThemeToggle />
         </div>
 
         {/* Today CTA */}
