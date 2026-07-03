@@ -829,6 +829,128 @@ function LogView({ data }: { data: Entry[] }) {
   );
 }
 
+// --- Habits tab ---
+
+/**
+ * One-row-per-habit summary table: current streak, a tally over the
+ * selected window, and a status badge. Positive habits track a "done"
+ * streak against a target rate; watch-list flags track a "clean" streak
+ * against occurrence count. Rows alternate bg-background / bg-muted, with
+ * a divider between the two habit groups (mirrors the Grid tab's layout).
+ *
+ * The weekly/monthly toggle only changes the tally window (last 7 vs all
+ * 30 days) — the streak column always reflects the true current streak,
+ * since a streak isn't meaningfully bounded by an arbitrary window.
+ */
+function HabitsView({ data }: { data: Entry[] }) {
+  const [view, setView] = useState<"weekly" | "monthly">("monthly");
+  const all = [...POSITIVE, ...FLAGS];
+  const windowData = view === "weekly" ? data.slice(-7) : data;
+  const windowLabel = view === "weekly" ? "7 Days" : "30 Days";
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <SectionLabel>habits</SectionLabel>
+        <div className="flex gap-1 mb-5">
+          {(["weekly", "monthly"] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`text-[9px] uppercase tracking-[0.15em] px-2.5 py-1 rounded border transition-colors ${
+                view === v
+                  ? "border-border text-foreground bg-muted"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="overflow-x-auto rounded border border-border">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="border-b border-border">
+              <th className="text-left text-muted-foreground font-normal uppercase tracking-[0.1em] px-4 py-2" style={{ fontSize: 9 }}>
+                Habit
+              </th>
+              <th className="text-right text-muted-foreground font-normal uppercase tracking-[0.1em] px-4 py-2" style={{ fontSize: 9 }}>
+                Streak
+              </th>
+              <th className="text-right text-muted-foreground font-normal uppercase tracking-[0.1em] px-4 py-2" style={{ fontSize: 9 }}>
+                {windowLabel}
+              </th>
+              <th className="text-right text-muted-foreground font-normal uppercase tracking-[0.1em] px-4 py-2" style={{ fontSize: 9 }}>
+                Status
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {all.map((habit, i) => {
+              const isFlag = FLAGS.includes(habit);
+              const rowBg = i % 2 === 0 ? "bg-background" : "bg-muted/40";
+
+              if (isFlag) {
+                const clean = streak(habit, data, false);
+                const count = windowData.filter((e) => e[habit] === true).length;
+                const isClean = clean > 0;
+                return (
+                  <Fragment key={habit}>
+                    {i === POSITIVE.length && (
+                      <tr>
+                        <td colSpan={4} className="text-muted-foreground/30 uppercase tracking-[0.15em] px-4" style={{ fontSize: 9, paddingTop: 14, paddingBottom: 4 }}>
+                          — watch list
+                        </td>
+                      </tr>
+                    )}
+                    <tr className={rowBg}>
+                      <td className="text-left text-foreground px-4 py-2 whitespace-nowrap" style={{ fontSize: 11 }}>
+                        {habit}
+                      </td>
+                      <td className="text-right tabular-nums text-muted-foreground px-4 py-2" style={{ fontSize: 11 }}>
+                        {clean > 0 ? `${clean}d` : "—"}
+                      </td>
+                      <td className="text-right tabular-nums text-muted-foreground px-4 py-2" style={{ fontSize: 11 }}>
+                        {count}×
+                      </td>
+                      <td className="text-right px-4 py-2">
+                        <Badge variant={isClean ? "success" : "danger"}>
+                          {isClean ? "clean" : "flagged"}
+                        </Badge>
+                      </td>
+                    </tr>
+                  </Fragment>
+                );
+              }
+
+              const s = streak(habit, data, true);
+              const rate = completionRate(habit, windowData);
+              const count = windowData.filter((e) => e[habit] === true).length;
+              return (
+                <tr key={habit} className={rowBg}>
+                  <td className="text-left text-foreground px-4 py-2 whitespace-nowrap" style={{ fontSize: 11 }}>
+                    {habit}
+                  </td>
+                  <td className="text-right tabular-nums text-muted-foreground px-4 py-2" style={{ fontSize: 11 }}>
+                    {s > 0 ? `${s}d` : "—"}
+                  </td>
+                  <td className="text-right tabular-nums text-muted-foreground px-4 py-2" style={{ fontSize: 11 }}>
+                    {count}/{windowData.length}
+                  </td>
+                  <td className="text-right px-4 py-2">
+                    <Badge variant={rateBadgeVariant(rate)}>{Math.round(rate * 100)}%</Badge>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // --- Progress tab ---
 
 /**
@@ -1035,6 +1157,7 @@ export default function Dashboard() {
               <TabsTrigger value="streaks">Streaks</TabsTrigger>
               <TabsTrigger value="grid">Grid</TabsTrigger>
               <TabsTrigger value="flags">Flags</TabsTrigger>
+              <TabsTrigger value="habits">Habits</TabsTrigger>
               <TabsTrigger value="progress">Progress</TabsTrigger>
               <TabsTrigger value="log">Log</TabsTrigger>
             </TabsList>
@@ -1049,6 +1172,10 @@ export default function Dashboard() {
 
             <TabsContent value="flags">
               <FlagsView data={data} />
+            </TabsContent>
+
+            <TabsContent value="habits">
+              <HabitsView data={data} />
             </TabsContent>
 
             <TabsContent value="progress">
