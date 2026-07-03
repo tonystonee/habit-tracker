@@ -286,7 +286,7 @@ function TodaySnapshot() {
       </div>
 
       {/* Positive habits — excludes non-daily tracked habits */}
-      <div className="flex flex-wrap gap-1.5 mb-3">
+      <div className="flex flex-wrap gap-2.5 mb-3">
         {DAILY_HABITS.map((habit) => {
           const done = habits[habit] === true;
           const busy = saving.has(habit);
@@ -295,7 +295,7 @@ function TodaySnapshot() {
               key={habit}
               onClick={() => toggle(habit)}
               disabled={busy}
-              className="text-[9px] uppercase tracking-[0.12em] px-2 py-0.5 rounded border transition-all duration-200 cursor-pointer"
+              className="text-[14px] uppercase tracking-[0.12em] px-5 py-3 rounded-md border transition-all duration-200 cursor-pointer"
               style={{
                 color: done ? "#4ade80" : "hsl(var(--muted-foreground))",
                 borderColor: done ? "#166534" : "hsl(var(--border))",
@@ -422,7 +422,7 @@ function WeeklyReviewCountBox({ count, target, todayAlreadyDone, countView }: We
         <button
           onClick={toggle}
           disabled={!loaded || saving}
-          className="mt-1 text-[8px] uppercase tracking-[0.12em] px-2 py-0.5 rounded border transition-all duration-200 cursor-pointer text-left"
+          className="mt-2 text-[13px] uppercase tracking-[0.12em] px-4 py-2.5 rounded-md border transition-all duration-200 cursor-pointer text-left"
           style={{
             color: checked ? "#4ade80" : needsAction ? "#fbbf24" : "hsl(var(--muted-foreground))",
             borderColor: checked ? "#166534" : needsAction ? "rgba(251,191,36,0.4)" : "hsl(var(--border))",
