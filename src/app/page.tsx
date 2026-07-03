@@ -729,7 +729,7 @@ function HabitPill({ habit, on, isFlag }: { habit: string; on: boolean; isFlag: 
         background: on ? (isFlag ? "rgba(248,113,113,0.06)" : "rgba(74,222,128,0.06)") : "transparent",
       }}
     >
-      {habit}
+      {habitLabel(habit)}
     </span>
   );
 }
@@ -958,7 +958,7 @@ function HabitsView({ data }: { data: Entry[] }) {
                     )}
                     <tr className={rowBg}>
                       <td className="text-left text-foreground px-4 py-2 whitespace-nowrap" style={{ fontSize: 11 }}>
-                        {habit}
+                        {habitLabel(habit)}
                       </td>
                       <td className="text-right tabular-nums text-muted-foreground px-4 py-2" style={{ fontSize: 11 }}>
                         {clean > 0 ? `${clean}d` : "—"}
@@ -986,7 +986,7 @@ function HabitsView({ data }: { data: Entry[] }) {
               return (
                 <tr key={habit} className={rowBg}>
                   <td className="text-left text-foreground px-4 py-2 whitespace-nowrap" style={{ fontSize: 11 }}>
-                    {habit}
+                    {habitLabel(habit)}
                   </td>
                   <td className="text-right tabular-nums text-muted-foreground px-4 py-2" style={{ fontSize: 11 }}>
                     {s > 0 ? `${s}d` : "—"}
