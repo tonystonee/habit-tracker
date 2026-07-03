@@ -279,7 +279,7 @@ function TodaySnapshot() {
         <p className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground">today</p>
         <span
           className="text-[11px] tabular-nums"
-          style={{ color: donePct === 100 ? "#4ade80" : donePct >= 50 ? "#facc15" : "#6b7280" }}
+          style={{ color: donePct === 100 ? "#4ade80" : donePct >= 50 ? "#facc15" : "hsl(var(--muted-foreground))" }}
         >
           {donePct}%
         </span>
@@ -297,8 +297,8 @@ function TodaySnapshot() {
               disabled={busy}
               className="text-[9px] uppercase tracking-[0.12em] px-2 py-0.5 rounded border transition-all duration-200 cursor-pointer"
               style={{
-                color: done ? "#4ade80" : "#555",
-                borderColor: done ? "#166534" : "#2a2a2a",
+                color: done ? "#4ade80" : "hsl(var(--muted-foreground))",
+                borderColor: done ? "#166534" : "hsl(var(--border))",
                 background: done ? "rgba(74,222,128,0.06)" : "transparent",
                 opacity: busy ? 0.5 : 1,
               }}
@@ -424,8 +424,8 @@ function WeeklyReviewCountBox({ count, target, todayAlreadyDone, countView }: We
           disabled={!loaded || saving}
           className="mt-1 text-[8px] uppercase tracking-[0.12em] px-2 py-0.5 rounded border transition-all duration-200 cursor-pointer text-left"
           style={{
-            color: checked ? "#4ade80" : needsAction ? "#fbbf24" : "#555",
-            borderColor: checked ? "#166534" : needsAction ? "rgba(251,191,36,0.4)" : "#2a2a2a",
+            color: checked ? "#4ade80" : needsAction ? "#fbbf24" : "hsl(var(--muted-foreground))",
+            borderColor: checked ? "#166534" : needsAction ? "rgba(251,191,36,0.4)" : "hsl(var(--border))",
             background: checked
               ? "rgba(74,222,128,0.06)"
               : needsAction
@@ -536,7 +536,7 @@ function StreaksView({ data }: { data: Entry[] }) {
 
               <span
                 className="text-[11px] w-10 text-right shrink-0 tabular-nums"
-                style={{ color: s > 0 ? "#4ade80" : "#444" }}
+                style={{ color: s > 0 ? "#4ade80" : "hsl(var(--muted-foreground))" }}
               >
                 {s > 0 ? `${s}d` : "—"}
               </span>
@@ -692,7 +692,7 @@ function FlagsView({ data }: { data: Entry[] }) {
 
                 <span
                   className="text-[11px] min-w-[70px] text-right tabular-nums"
-                  style={{ color: flaggedCount > 0 ? "#f87171" : "#444" }}
+                  style={{ color: flaggedCount > 0 ? "#f87171" : "hsl(var(--muted-foreground))" }}
                 >
                   {flaggedCount}× / 30d
                 </span>
