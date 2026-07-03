@@ -715,8 +715,37 @@ function FlagsView({ data }: { data: Entry[] }) {
  * across positive habits and a raw flagged-habit count. Rows alternate
  * bg-background / bg-muted for scannability, both theme-aware.
  */
+/**
+ * Renders one habit's on/off state as a small pill — green/red border+text when
+ * done (red for a triggered flag habit), muted when not.
+ */
+function HabitPill({ habit, on, isFlag }: { habit: string; on: boolean; isFlag: boolean }) {
+  return (
+    <span
+      className="text-[9px] uppercase tracking-[0.1em] px-2 py-0.5 rounded border whitespace-nowrap"
+      style={{
+        color: on ? (isFlag ? "#f87171" : "#4ade80") : "hsl(var(--muted-foreground))",
+        borderColor: on ? (isFlag ? "#991b1b" : "#166534") : "hsl(var(--border))",
+        background: on ? (isFlag ? "rgba(248,113,113,0.06)" : "rgba(74,222,128,0.06)") : "transparent",
+      }}
+    >
+      {habit}
+    </span>
+  );
+}
+
 function LogView({ data }: { data: Entry[] }) {
   const rows = [...data].reverse();
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  function toggle(date: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(date)) next.delete(date);
+      else next.add(date);
+      return next;
+    });
+  }
 
   return (
     <div>
@@ -745,25 +774,52 @@ function LogView({ data }: { data: Entry[] }) {
               const done = POSITIVE.filter((h) => e[h] === true).length;
               const rate = POSITIVE.length ? done / POSITIVE.length : 0;
               const flagged = FLAGS.filter((h) => e[h] === true).length;
+              const isOpen = expanded.has(e.date);
+              const rowBg = i % 2 === 0 ? "bg-background" : "bg-muted/40";
 
               return (
-                <tr key={e.date} className={i % 2 === 0 ? "bg-background" : "bg-muted/40"}>
-                  <td className="text-left text-foreground px-4 py-2 whitespace-nowrap" style={{ fontSize: 11 }}>
-                    {d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
-                  </td>
-                  <td className="text-right tabular-nums text-muted-foreground px-4 py-2" style={{ fontSize: 11 }}>
-                    {done}/{POSITIVE.length}
-                  </td>
-                  <td className="text-right tabular-nums px-4 py-2" style={{ fontSize: 11, color: rateColor(rate) }}>
-                    {Math.round(rate * 100)}%
-                  </td>
-                  <td
-                    className="text-right tabular-nums px-4 py-2"
-                    style={{ fontSize: 11, color: flagged > 0 ? "#f87171" : "hsl(var(--muted-foreground))" }}
+                <Fragment key={e.date}>
+                  <tr
+                    onClick={() => toggle(e.date)}
+                    className={`${rowBg} cursor-pointer hover:bg-muted/60 transition-colors`}
                   >
-                    {flagged || "—"}
-                  </td>
-                </tr>
+                    <td className="text-left text-foreground px-4 py-2 whitespace-nowrap" style={{ fontSize: 11 }}>
+                      <span
+                        className="inline-block mr-1.5 text-muted-foreground transition-transform"
+                        style={{ fontSize: 8, transform: isOpen ? "rotate(90deg)" : "none" }}
+                      >
+                        ▸
+                      </span>
+                      {d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                    </td>
+                    <td className="text-right tabular-nums text-muted-foreground px-4 py-2" style={{ fontSize: 11 }}>
+                      {done}/{POSITIVE.length}
+                    </td>
+                    <td className="text-right tabular-nums px-4 py-2" style={{ fontSize: 11, color: rateColor(rate) }}>
+                      {Math.round(rate * 100)}%
+                    </td>
+                    <td
+                      className="text-right tabular-nums px-4 py-2"
+                      style={{ fontSize: 11, color: flagged > 0 ? "#f87171" : "hsl(var(--muted-foreground))" }}
+                    >
+                      {flagged || "—"}
+                    </td>
+                  </tr>
+                  {isOpen && (
+                    <tr className={rowBg}>
+                      <td colSpan={4} className="px-4 pt-0 pb-3">
+                        <div className="flex flex-wrap gap-1.5 pt-2.5 border-t border-border/50">
+                          {POSITIVE.map((h) => (
+                            <HabitPill key={h} habit={h} on={e[h] === true} isFlag={false} />
+                          ))}
+                          {FLAGS.map((h) => (
+                            <HabitPill key={h} habit={h} on={e[h] === true} isFlag={true} />
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               );
             })}
           </tbody>
