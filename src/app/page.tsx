@@ -925,8 +925,12 @@ function HabitsView({ data }: { data: Entry[] }) {
               }
 
               const s = streak(habit, data, true);
-              const rate = completionRate(habit, windowData);
               const count = windowData.filter((e) => e[habit] === true).length;
+              // Scale the weekly target to the window length so "4x/week" reads
+              // as ~17/30 over a month rather than judged against every day.
+              const weeklyTarget = WEEKLY_TARGETS[habit] ?? 7;
+              const target = Math.round(weeklyTarget * (windowData.length / 7));
+              const rate = target > 0 ? Math.min(1, count / target) : 0;
               return (
                 <tr key={habit} className={rowBg}>
                   <td className="text-left text-foreground px-4 py-2 whitespace-nowrap" style={{ fontSize: 11 }}>
@@ -936,7 +940,7 @@ function HabitsView({ data }: { data: Entry[] }) {
                     {s > 0 ? `${s}d` : "—"}
                   </td>
                   <td className="text-right tabular-nums text-muted-foreground px-4 py-2" style={{ fontSize: 11 }}>
-                    {count}/{windowData.length}
+                    {count}/{target}
                   </td>
                   <td className="text-right px-4 py-2">
                     <Badge variant={rateBadgeVariant(rate)}>{Math.round(rate * 100)}%</Badge>
