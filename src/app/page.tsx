@@ -610,19 +610,18 @@ function GridView({ data }: { data: Entry[] }) {
                     return (
                       <td key={e.date} title={`${habit} · ${e.date}`}>
                         <div
+                          // green for done positive, red for flagged watch-list; empty cells use
+                          // the theme's muted/border tokens so they match light and dark mode
+                          className={on ? "" : "bg-muted border-border"}
                           style={{
                             width: 18,
                             height: 18,
                             borderRadius: 3,
-                            // green for done positive, red for flagged watch-list, dark for empty
-                            background: on
-                              ? isFlag ? "#6b1f1f" : "#14532d"
-                              : "#1c1c1c",
-                            border: `1px solid ${
-                              on
-                                ? isFlag ? "#991b1b" : "#166534"
-                                : "#262626"
-                            }`,
+                            ...(on && {
+                              background: isFlag ? "#6b1f1f" : "#14532d",
+                              border: `1px solid ${isFlag ? "#991b1b" : "#166534"}`,
+                            }),
+                            ...(!on && { borderWidth: 1, borderStyle: "solid" }),
                           }}
                         />
                       </td>
@@ -640,10 +639,20 @@ function GridView({ data }: { data: Entry[] }) {
         {[
           { bg: "#14532d", border: "#166534", label: "done" },
           { bg: "#6b1f1f", border: "#991b1b", label: "flagged" },
-          { bg: "#1c1c1c", border: "#262626", label: "missed / clean" },
+          { label: "missed / clean" },
         ].map(({ bg, border, label }) => (
           <span key={label} className="flex items-center gap-1.5">
-            <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: bg, border: `1px solid ${border}` }} />
+            <span
+              className={bg ? "" : "bg-muted border-border"}
+              style={{
+                display: "inline-block",
+                width: 10,
+                height: 10,
+                borderRadius: 2,
+                ...(bg && { background: bg, border: `1px solid ${border}` }),
+                ...(!bg && { borderWidth: 1, borderStyle: "solid" }),
+              }}
+            />
             {label}
           </span>
         ))}
