@@ -832,18 +832,42 @@ function LogView({ data }: { data: Entry[] }) {
 // --- Habits tab ---
 
 /**
- * One-row-per-habit summary table: current streak, 30-day tally, and a
- * status badge. Positive habits track a "done" streak against a target
- * rate; watch-list flags track a "clean" streak against occurrence count.
- * Rows alternate bg-background / bg-muted, with a divider between the
- * two habit groups (mirrors the Grid tab's layout).
+ * One-row-per-habit summary table: current streak, a tally over the
+ * selected window, and a status badge. Positive habits track a "done"
+ * streak against a target rate; watch-list flags track a "clean" streak
+ * against occurrence count. Rows alternate bg-background / bg-muted, with
+ * a divider between the two habit groups (mirrors the Grid tab's layout).
+ *
+ * The weekly/monthly toggle only changes the tally window (last 7 vs all
+ * 30 days) — the streak column always reflects the true current streak,
+ * since a streak isn't meaningfully bounded by an arbitrary window.
  */
 function HabitsView({ data }: { data: Entry[] }) {
+  const [view, setView] = useState<"weekly" | "monthly">("monthly");
   const all = [...POSITIVE, ...FLAGS];
+  const windowData = view === "weekly" ? data.slice(-7) : data;
+  const windowLabel = view === "weekly" ? "7 Days" : "30 Days";
 
   return (
     <div>
-      <SectionLabel>habits — last 30 days</SectionLabel>
+      <div className="flex items-center justify-between mb-2">
+        <SectionLabel>habits</SectionLabel>
+        <div className="flex gap-1 mb-5">
+          {(["weekly", "monthly"] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`text-[9px] uppercase tracking-[0.15em] px-2.5 py-1 rounded border transition-colors ${
+                view === v
+                  ? "border-border text-foreground bg-muted"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="overflow-x-auto rounded border border-border">
         <table className="w-full border-collapse">
           <thead>
@@ -855,7 +879,7 @@ function HabitsView({ data }: { data: Entry[] }) {
                 Streak
               </th>
               <th className="text-right text-muted-foreground font-normal uppercase tracking-[0.1em] px-4 py-2" style={{ fontSize: 9 }}>
-                30 Days
+                {windowLabel}
               </th>
               <th className="text-right text-muted-foreground font-normal uppercase tracking-[0.1em] px-4 py-2" style={{ fontSize: 9 }}>
                 Status
@@ -869,7 +893,7 @@ function HabitsView({ data }: { data: Entry[] }) {
 
               if (isFlag) {
                 const clean = streak(habit, data, false);
-                const count = data.filter((e) => e[habit] === true).length;
+                const count = windowData.filter((e) => e[habit] === true).length;
                 const isClean = clean > 0;
                 return (
                   <Fragment key={habit}>
@@ -901,8 +925,8 @@ function HabitsView({ data }: { data: Entry[] }) {
               }
 
               const s = streak(habit, data, true);
-              const rate = completionRate(habit, data);
-              const count = data.filter((e) => e[habit] === true).length;
+              const rate = completionRate(habit, windowData);
+              const count = windowData.filter((e) => e[habit] === true).length;
               return (
                 <tr key={habit} className={rowBg}>
                   <td className="text-left text-foreground px-4 py-2 whitespace-nowrap" style={{ fontSize: 11 }}>
@@ -912,7 +936,7 @@ function HabitsView({ data }: { data: Entry[] }) {
                     {s > 0 ? `${s}d` : "—"}
                   </td>
                   <td className="text-right tabular-nums text-muted-foreground px-4 py-2" style={{ fontSize: 11 }}>
-                    {count}/30
+                    {count}/{windowData.length}
                   </td>
                   <td className="text-right px-4 py-2">
                     <Badge variant={rateBadgeVariant(rate)}>{Math.round(rate * 100)}%</Badge>
