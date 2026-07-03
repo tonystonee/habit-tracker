@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Checkbox } from "@/components/ui/checkbox";
+import { habitLabel } from "@/lib/habits";
 
 // --- Constants ---
 
@@ -124,7 +125,7 @@ function HabitRow({ habit, checked, isFlag, disabled, flashing, onToggle }: Habi
             : "text-muted-foreground group-hover:text-foreground"
         }`}
       >
-        {habit}
+        {habitLabel(habit)}
       </span>
     </label>
   );
