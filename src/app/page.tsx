@@ -705,6 +705,71 @@ function FlagsView({ data }: { data: Entry[] }) {
   );
 }
 
+// --- Log tab ---
+
+/**
+ * Daily summary table — one row per day (newest first) with completion %
+ * across positive habits and a raw flagged-habit count. Rows alternate
+ * bg-background / bg-muted for scannability, both theme-aware.
+ */
+function LogView({ data }: { data: Entry[] }) {
+  const rows = [...data].reverse();
+
+  return (
+    <div>
+      <SectionLabel>daily log — last 30 days</SectionLabel>
+      <div className="overflow-x-auto rounded border border-border">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="border-b border-border">
+              <th className="text-left text-muted-foreground font-normal uppercase tracking-[0.1em] px-4 py-2" style={{ fontSize: 9 }}>
+                Date
+              </th>
+              <th className="text-right text-muted-foreground font-normal uppercase tracking-[0.1em] px-4 py-2" style={{ fontSize: 9 }}>
+                Habits Done
+              </th>
+              <th className="text-right text-muted-foreground font-normal uppercase tracking-[0.1em] px-4 py-2" style={{ fontSize: 9 }}>
+                Completion
+              </th>
+              <th className="text-right text-muted-foreground font-normal uppercase tracking-[0.1em] px-4 py-2" style={{ fontSize: 9 }}>
+                Flags
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((e, i) => {
+              const d = new Date(e.date + "T12:00:00");
+              const done = POSITIVE.filter((h) => e[h] === true).length;
+              const rate = POSITIVE.length ? done / POSITIVE.length : 0;
+              const flagged = FLAGS.filter((h) => e[h] === true).length;
+
+              return (
+                <tr key={e.date} className={i % 2 === 0 ? "bg-background" : "bg-muted/40"}>
+                  <td className="text-left text-foreground px-4 py-2 whitespace-nowrap" style={{ fontSize: 11 }}>
+                    {d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                  </td>
+                  <td className="text-right tabular-nums text-muted-foreground px-4 py-2" style={{ fontSize: 11 }}>
+                    {done}/{POSITIVE.length}
+                  </td>
+                  <td className="text-right tabular-nums px-4 py-2" style={{ fontSize: 11, color: rateColor(rate) }}>
+                    {Math.round(rate * 100)}%
+                  </td>
+                  <td
+                    className="text-right tabular-nums px-4 py-2"
+                    style={{ fontSize: 11, color: flagged > 0 ? "#f87171" : "hsl(var(--muted-foreground))" }}
+                  >
+                    {flagged || "—"}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // --- Progress tab ---
 
 /**
@@ -916,6 +981,7 @@ export default function Dashboard() {
               <TabsTrigger value="grid">Grid</TabsTrigger>
               <TabsTrigger value="flags">Flags</TabsTrigger>
               <TabsTrigger value="progress">Progress</TabsTrigger>
+              <TabsTrigger value="log">Log</TabsTrigger>
             </TabsList>
 
             <TabsContent value="streaks">
@@ -932,6 +998,10 @@ export default function Dashboard() {
 
             <TabsContent value="progress">
               <ProgressView />
+            </TabsContent>
+
+            <TabsContent value="log">
+              <LogView data={data} />
             </TabsContent>
           </Tabs>
         )}
