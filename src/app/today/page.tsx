@@ -12,7 +12,6 @@ const POSITIVE = [
   "Meditate",
   "Take Creatine",
   "Take Medication",
-  "Weekly Money Review",
 ];
 
 const FLAGS = [
