@@ -198,8 +198,9 @@ function periodCount(
     target = weeklyTarget;
   } else {
     fromStr = todayStr.slice(0, 7) + "-01";
-    const daysElapsed = today.getDate();
-    target = Math.round(weeklyTarget * (daysElapsed / 7));
+    const [y, m] = todayStr.split("-").map(Number);
+    const daysInMonth = new Date(y, m, 0).getDate();
+    target = Math.round(weeklyTarget * (daysInMonth / 7));
   }
 
   const slice = data.filter((e) => e.date >= fromStr && e.date <= todayStr);
@@ -317,13 +318,15 @@ interface WeeklyReviewCountBoxProps {
   target: number;
   /** Whether today's entry in the 30-day data array already has this checked */
   todayAlreadyDone: boolean;
+  countView: "weekly" | "monthly";
 }
 
 /**
  * Count box for Weekly Money Review that also exposes a toggle button so
  * the user can mark it done without navigating to the today page.
+ * The toggle is only shown in weekly mode — in monthly mode it's not actionable.
  */
-function WeeklyReviewCountBox({ count, target, todayAlreadyDone }: WeeklyReviewCountBoxProps) {
+function WeeklyReviewCountBox({ count, target, todayAlreadyDone, countView }: WeeklyReviewCountBoxProps) {
   const [checked, setChecked] = useState(todayAlreadyDone);
   const [pageId, setPageId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -386,19 +389,21 @@ function WeeklyReviewCountBox({ count, target, todayAlreadyDone }: WeeklyReviewC
           /{target}
         </span>
       </span>
-      <button
-        onClick={toggle}
-        disabled={!loaded || saving}
-        className="mt-1 text-[8px] uppercase tracking-[0.12em] px-2 py-0.5 rounded border transition-all duration-200 cursor-pointer text-left"
-        style={{
-          color: checked ? "#4ade80" : "#555",
-          borderColor: checked ? "#166534" : "#2a2a2a",
-          background: checked ? "rgba(74,222,128,0.06)" : "transparent",
-          opacity: !loaded || saving ? 0.5 : 1,
-        }}
-      >
-        {!loaded ? "···" : checked ? "done this week ✓" : "mark done"}
-      </button>
+      {countView === "weekly" && (
+        <button
+          onClick={toggle}
+          disabled={!loaded || saving}
+          className="mt-1 text-[8px] uppercase tracking-[0.12em] px-2 py-0.5 rounded border transition-all duration-200 cursor-pointer text-left"
+          style={{
+            color: checked ? "#4ade80" : "#555",
+            borderColor: checked ? "#166534" : "#2a2a2a",
+            background: checked ? "rgba(74,222,128,0.06)" : "transparent",
+            opacity: !loaded || saving ? 0.5 : 1,
+          }}
+        >
+          {!loaded ? "···" : checked ? "done this week ✓" : "mark done"}
+        </button>
+      )}
     </div>
   );
 }
@@ -444,6 +449,7 @@ function StreaksView({ data }: { data: Entry[] }) {
                   count={count}
                   target={target}
                   todayAlreadyDone={todayAlreadyDone}
+                  countView={countView}
                 />
               );
             }
