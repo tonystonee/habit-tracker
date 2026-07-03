@@ -781,15 +781,15 @@ function LogView({ data }: { data: Entry[] }) {
  */
 function ProgressTable({ habits, periods, isFlag }: { habits: string[]; periods: Period[]; isFlag: boolean }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full" style={{ borderSpacing: "0 2px", borderCollapse: "separate" }}>
+    <div className="overflow-x-auto rounded border border-border">
+      <table className="w-full border-collapse">
         <thead>
-          <tr>
-            <th style={{ minWidth: 170 }} />
+          <tr className="border-b border-border">
+            <th className="text-left text-muted-foreground font-normal uppercase tracking-[0.1em] px-4 py-2" style={{ fontSize: 9 }} />
             {periods.map((p) => (
               <th
                 key={p.key}
-                className="text-muted-foreground font-normal text-center pb-3"
+                className="text-right text-muted-foreground font-normal uppercase tracking-[0.1em] px-4 py-2"
                 style={{ fontSize: 9, minWidth: 64 }}
               >
                 {p.label}
@@ -798,11 +798,11 @@ function ProgressTable({ habits, periods, isFlag }: { habits: string[]; periods:
           </tr>
         </thead>
         <tbody>
-          {habits.map((habit) => (
-            <tr key={habit}>
+          {habits.map((habit, i) => (
+            <tr key={habit} className={i % 2 === 0 ? "bg-background" : "bg-muted/40"}>
               <td
-                className="text-muted-foreground text-right pr-4 whitespace-nowrap"
-                style={{ fontSize: 10, paddingTop: 3, paddingBottom: 3 }}
+                className="text-left text-foreground px-4 py-2 whitespace-nowrap"
+                style={{ fontSize: 11 }}
               >
                 {habit}
               </td>
@@ -811,10 +811,8 @@ function ProgressTable({ habits, periods, isFlag }: { habits: string[]; periods:
                   const count = p.data.filter((e) => e[habit] === true).length;
                   const color = count === 0 ? "#4ade80" : count <= 2 ? "#facc15" : "#f87171";
                   return (
-                    <td key={p.key} className="text-center" style={{ paddingTop: 3, paddingBottom: 3 }}>
-                      <span className="tabular-nums" style={{ fontSize: 11, color }}>
-                        {count === 0 ? "—" : `${count}×`}
-                      </span>
+                    <td key={p.key} className="text-right tabular-nums px-4 py-2" style={{ fontSize: 11, color }}>
+                      {count === 0 ? "—" : `${count}×`}
                     </td>
                   );
                 }
@@ -827,10 +825,8 @@ function ProgressTable({ habits, periods, isFlag }: { habits: string[]; periods:
                   ? `${count}/${Math.round(periodTarget)}`
                   : "—";
                 return (
-                  <td key={p.key} className="text-center" style={{ paddingTop: 3, paddingBottom: 3 }}>
-                    <span className="tabular-nums" style={{ fontSize: 11, color: rateColor(rate) }}>
-                      {label}
-                    </span>
+                  <td key={p.key} className="text-right tabular-nums px-4 py-2" style={{ fontSize: 11, color: rateColor(rate) }}>
+                    {label}
                   </td>
                 );
               })}
