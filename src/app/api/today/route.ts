@@ -27,6 +27,21 @@ function getNotion() {
   return new Client({ auth: process.env.NOTION_API_KEY });
 }
 
+// Matches the manual naming convention used in Notion: "Jul 3 (Fri)", "Jun 30 (Tues)"
+const WEEKDAYS = ["Sun", "Mon", "Tues", "Wed", "Thurs", "Fri", "Sat"];
+
+/**
+ * Formats a YYYY-MM-DD date string as the Notion page title convention, e.g. "Jul 3 (Fri)".
+ * Anchors the date at noon local time to prevent UTC-midnight date shifts.
+ */
+function formatPageName(dateStr: string): string {
+  const d = new Date(dateStr + "T12:00:00");
+  const month = d.toLocaleDateString("en-US", { month: "short" });
+  const day = d.getDate();
+  const weekday = WEEKDAYS[d.getDay()];
+  return `${month} ${day} (${weekday})`;
+}
+
 /**
  * Returns today's date in YYYY-MM-DD, preferring the `date` query param sent
  * by the client (local calendar date) so server UTC never drifts from the
@@ -135,6 +150,7 @@ export async function PATCH(request: NextRequest) {
       const created = await notion.pages.create({
         parent: { database_id: dbId },
         properties: {
+          Name: { title: [{ text: { content: formatPageName(today) } }] },
           Date: { date: { start: today } },
         },
       });
