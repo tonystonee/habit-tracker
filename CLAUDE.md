@@ -62,6 +62,22 @@ NOTION_API_KEY=secret_xxx
 ### No comments inside JSX unless unavoidable
 Prefer clear component and prop names over explanatory comments. If a comment is truly needed, use `{/* */}`.
 
+## Theming / color usage
+
+This app supports light and dark mode via `next-themes` (`ThemeProvider` in `src/components/theme-provider.tsx`), which toggles a `.dark` class on `<html>`. Tailwind v4 + shadcn map `--color-*` tokens (`background`, `foreground`, `muted`, `muted-foreground`, `border`, etc.) to CSS custom properties defined once in `src/app/globals.css` — separately for `:root` (light) and `.dark` (dark).
+
+**Rule: any color that represents a neutral/structural surface — an empty state, an unchecked/off toggle, a border, a disabled or "no data" cell, muted body text — must use a theme token, never a hardcoded hex/rgb value.**
+
+- Prefer Tailwind utility classes tied to the tokens: `bg-muted`, `border-border`, `text-muted-foreground`, `text-foreground`, `bg-background`.
+- If the value has to live in an inline `style` (e.g. mixed with a conditional accent color), reference the CSS variable directly: `"hsl(var(--muted-foreground))"`, `"hsl(var(--border))"` — not a literal hex like `#555` or `#1c1c1c`.
+- **Exception:** fixed, saturated *semantic status* colors (green for "done"/"good", yellow/amber for "warning", red for "flagged"/"bad") are fine as hardcoded hex, since they're meant to read the same in both themes. Only the neutral/"off" counterpart of a status pairing needs to be a theme token — e.g. `done ? "#4ade80" : "hsl(var(--muted-foreground))"`, not `done ? "#4ade80" : "#555"`.
+
+Before shipping any new UI or color logic, grep for raw hex/rgb literals and check each one against the rule above:
+```bash
+grep -n '#[0-9a-fA-F]\{3,6\}\|rgb(\|rgba(' src/app/page.tsx src/components/**/*.tsx
+```
+Then verify both themes visually (toggle the theme button, or automate with Playwright) — don't just eyeball one mode and assume the other matches.
+
 ## Git
 
 Never add `Co-Authored-By: Claude` trailers to commit messages.
