@@ -6,6 +6,7 @@ import { BellRing } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { POSITIVE, FLAGS, WEEKLY_TARGETS } from "@/lib/habits";
 
 // Habits shown in the daily check-in snapshot (excludes non-daily tracked habits)
@@ -865,13 +866,16 @@ export default function Dashboard() {
       <div className="max-w-4xl mx-auto">
 
         {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-sm font-medium tracking-[0.3em] uppercase text-primary mb-1.5">
-            habit tracker
-          </h1>
-          <p className="text-[11px] text-muted-foreground tracking-wide">
-            {rangeLabel} · {raw.length} entries
-          </p>
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <h1 className="text-sm font-medium tracking-[0.3em] uppercase text-primary mb-1.5">
+              habit tracker
+            </h1>
+            <p className="text-[11px] text-muted-foreground tracking-wide">
+              {rangeLabel} · {raw.length} entries
+            </p>
+          </div>
+          <ThemeToggle />
         </div>
 
         {/* Today CTA */}
