@@ -603,7 +603,7 @@ function GridView({ data }: { data: Entry[] }) {
                     className="text-muted-foreground"
                     style={{ fontSize: 10, textAlign: "right", paddingRight: 10, whiteSpace: "nowrap", verticalAlign: "middle" }}
                   >
-                    {habit}
+                    {habitLabel(habit)}
                   </td>
                   {data.map((e) => {
                     const on = e[habit] === true;
