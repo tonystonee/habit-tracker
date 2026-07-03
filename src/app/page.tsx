@@ -7,6 +7,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { POSITIVE, FLAGS, WEEKLY_TARGETS } from "@/lib/habits";
 
+// Habits shown in the daily check-in snapshot (excludes non-daily tracked habits)
+const DAILY_HABITS = POSITIVE.filter((h) => h !== "Weekly Money Review");
+
 // --- Types ---
 
 type Entry = { date: string; [k: string]: string | boolean };
@@ -263,8 +266,8 @@ function TodaySnapshot() {
     </div>
   );
 
-  const donePct = POSITIVE.length
-    ? Math.round((POSITIVE.filter((h) => habits[h]).length / POSITIVE.length) * 100)
+  const donePct = DAILY_HABITS.length
+    ? Math.round((DAILY_HABITS.filter((h) => habits[h]).length / DAILY_HABITS.length) * 100)
     : 0;
 
   return (
@@ -279,9 +282,9 @@ function TodaySnapshot() {
         </span>
       </div>
 
-      {/* Positive habits */}
+      {/* Positive habits — excludes non-daily tracked habits */}
       <div className="flex flex-wrap gap-1.5 mb-3">
-        {POSITIVE.map((habit) => {
+        {DAILY_HABITS.map((habit) => {
           const done = habits[habit] === true;
           const busy = saving.has(habit);
           return (
@@ -303,6 +306,99 @@ function TodaySnapshot() {
         })}
       </div>
 
+    </div>
+  );
+}
+
+// --- Weekly Money Review count box with today toggle ---
+
+interface WeeklyReviewCountBoxProps {
+  count: number;
+  target: number;
+  /** Whether today's entry in the 30-day data array already has this checked */
+  todayAlreadyDone: boolean;
+}
+
+/**
+ * Count box for Weekly Money Review that also exposes a toggle button so
+ * the user can mark it done without navigating to the today page.
+ */
+function WeeklyReviewCountBox({ count, target, todayAlreadyDone }: WeeklyReviewCountBoxProps) {
+  const [checked, setChecked] = useState(todayAlreadyDone);
+  const [pageId, setPageId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    const date = new Date().toLocaleDateString("en-CA");
+    fetch(`/api/today?date=${date}`)
+      .then((r) => r.json())
+      .then((d: { pageId?: string | null; habits?: Record<string, boolean> }) => {
+        setPageId(d.pageId ?? null);
+        setChecked(d.habits?.["Weekly Money Review"] ?? false);
+        setLoaded(true);
+      });
+  }, []);
+
+  async function toggle() {
+    if (!loaded || saving) return;
+    const next = !checked;
+    setChecked(next);
+    setSaving(true);
+    try {
+      const res = await fetch("/api/today", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pageId,
+          habit: "Weekly Money Review",
+          checked: next,
+          date: new Date().toLocaleDateString("en-CA"),
+        }),
+      });
+      const data = (await res.json()) as { pageId?: string };
+      if (data.pageId && !pageId) setPageId(data.pageId);
+    } catch {
+      setChecked(!next);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Adjust the count in real time: if the user just toggled today's state,
+  // offset the stale value from the 30-day data array.
+  const displayCount = count + (checked ? 1 : 0) - (todayAlreadyDone ? 1 : 0);
+  const rate = target > 0 ? Math.min(1, displayCount / target) : 0;
+  const color = rateColor(rate);
+  const hit = displayCount >= target;
+
+  return (
+    <div
+      className="flex-1 rounded border border-border p-3 flex flex-col gap-1"
+      style={{ background: hit ? "rgba(74,222,128,0.04)" : "transparent" }}
+    >
+      <span className="text-[9px] uppercase tracking-[0.15em] text-muted-foreground truncate">
+        Weekly Money Review
+      </span>
+      <span className="tabular-nums font-medium" style={{ fontSize: 22, color }}>
+        {displayCount}
+        <span className="text-muted-foreground" style={{ fontSize: 13, fontWeight: 400 }}>
+          /{target}
+        </span>
+      </span>
+      <button
+        onClick={toggle}
+        disabled={!loaded || saving}
+        className="mt-1 text-[8px] uppercase tracking-[0.12em] px-2 py-0.5 rounded border transition-all duration-200 cursor-pointer text-left"
+        style={{
+          color: checked ? "#4ade80" : "#555",
+          borderColor: checked ? "#166534" : "#2a2a2a",
+          background: checked ? "rgba(74,222,128,0.06)" : "transparent",
+          opacity: !loaded || saving ? 0.5 : 1,
+        }}
+      >
+        {!loaded ? "···" : checked ? "done this week ✓" : "mark done"}
+      </button>
     </div>
   );
 }
@@ -338,6 +434,20 @@ function StreaksView({ data }: { data: Entry[] }) {
         <div className="flex gap-3">
           {trackedHabits.map((habit) => {
             const { count, target } = periodCount(habit, data, countView);
+
+            if (habit === "Weekly Money Review") {
+              const todayEntry = data[data.length - 1];
+              const todayAlreadyDone = todayEntry?.[habit] === true;
+              return (
+                <WeeklyReviewCountBox
+                  key={habit}
+                  count={count}
+                  target={target}
+                  todayAlreadyDone={todayAlreadyDone}
+                />
+              );
+            }
+
             const rate = target > 0 ? Math.min(1, count / target) : 0;
             const color = rateColor(rate);
             const hit = count >= target;
