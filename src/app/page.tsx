@@ -1010,6 +1010,42 @@ function HabitsView({ data }: { data: Entry[] }) {
 // --- Progress tab ---
 
 /**
+ * Tiny inline bar chart summarizing a habit's trend across periods — each
+ * bar's height is its 0–1 value and its color is that period's status tier
+ * (the same green/yellow/red already used in the adjacent cells), so the
+ * shape of the trend is readable at a glance without a legend or axis.
+ *
+ * @param bars - One entry per period: `value` in [0, 1] and its status `color`, plus a `label` for the hover tooltip.
+ */
+function Sparkline({ bars }: { bars: { value: number; color: string; label: string }[] }) {
+  const barWidth = 6;
+  const gap = 2;
+  const height = 20;
+  const width = bars.length * barWidth + (bars.length - 1) * gap;
+
+  return (
+    <svg width={width} height={height} style={{ display: "block", marginLeft: "auto" }}>
+      {bars.map((b, i) => {
+        const h = Math.max(2, Math.round(b.value * height));
+        return (
+          <rect
+            key={i}
+            x={i * (barWidth + gap)}
+            y={height - h}
+            width={barWidth}
+            height={h}
+            rx={1.5}
+            fill={b.color}
+          >
+            <title>{b.label}</title>
+          </rect>
+        );
+      })}
+    </svg>
+  );
+}
+
+/**
  * Renders a table of habits × time-periods for either weekly or monthly groupings.
  *
  * @param habits   - Ordered list of habit names to display.
@@ -1032,43 +1068,64 @@ function ProgressTable({ habits, periods, isFlag }: { habits: string[]; periods:
                 {p.label}
               </th>
             ))}
+            <th className="text-right text-muted-foreground font-normal uppercase tracking-[0.1em] px-4 py-2" style={{ fontSize: 9 }}>
+              Trend
+            </th>
           </tr>
         </thead>
         <tbody>
-          {habits.map((habit, i) => (
-            <tr key={habit} className={i % 2 === 0 ? "bg-background" : "bg-muted/40"}>
-              <td
-                className="text-left text-foreground px-4 py-2 whitespace-nowrap"
-                style={{ fontSize: 11 }}
-              >
-                {habitLabel(habit)}
-              </td>
-              {periods.map((p) => {
-                if (isFlag) {
+          {habits.map((habit, i) => {
+            // For flags, a "clean" period (0 occurrences) is the good outcome, so
+            // the sparkline bar value is inverted — taller bar = cleaner period.
+            const bars = periods.map((p) => {
+              if (isFlag) {
+                const count = p.data.filter((e) => e[habit] === true).length;
+                const color = count === 0 ? "#4ade80" : count <= 2 ? "#facc15" : "#f87171";
+                const value = count === 0 ? 1 : count <= 2 ? 0.6 : 0.25;
+                return { value, color, label: `${p.label}: ${count === 0 ? "clean" : `${count}×`}` };
+              }
+              const count = p.data.filter((e) => e[habit] === true).length;
+              const weeklyTarget = WEEKLY_TARGETS[habit] ?? 7;
+              const periodTarget = weeklyTarget * (p.data.length / 7);
+              const rate = p.data.length ? Math.min(1, count / periodTarget) : 0;
+              return { value: rate, color: rateColor(rate), label: `${p.label}: ${Math.round(rate * 100)}%` };
+            });
+
+            return (
+              <tr key={habit} className={i % 2 === 0 ? "bg-background" : "bg-muted/40"}>
+                <td
+                  className="text-left text-foreground px-4 py-2 whitespace-nowrap"
+                  style={{ fontSize: 11 }}
+                >
+                  {habitLabel(habit)}
+                </td>
+                {periods.map((p, j) => {
+                  if (isFlag) {
+                    const count = p.data.filter((e) => e[habit] === true).length;
+                    return (
+                      <td key={p.key} className="text-right tabular-nums px-4 py-2" style={{ fontSize: 11, color: bars[j].color }}>
+                        {count === 0 ? "—" : `${count}×`}
+                      </td>
+                    );
+                  }
                   const count = p.data.filter((e) => e[habit] === true).length;
-                  const color = count === 0 ? "#4ade80" : count <= 2 ? "#facc15" : "#f87171";
+                  const weeklyTarget = WEEKLY_TARGETS[habit] ?? 7;
+                  const periodTarget = weeklyTarget * (p.data.length / 7);
+                  const label = p.data.length
+                    ? `${count}/${Math.round(periodTarget)}`
+                    : "—";
                   return (
-                    <td key={p.key} className="text-right tabular-nums px-4 py-2" style={{ fontSize: 11, color }}>
-                      {count === 0 ? "—" : `${count}×`}
+                    <td key={p.key} className="text-right tabular-nums px-4 py-2" style={{ fontSize: 11, color: bars[j].color }}>
+                      {label}
                     </td>
                   );
-                }
-                const count = p.data.filter((e) => e[habit] === true).length;
-                // Scale the weekly target to the actual number of days in this period
-                const weeklyTarget = WEEKLY_TARGETS[habit] ?? 7;
-                const periodTarget = weeklyTarget * (p.data.length / 7);
-                const rate = p.data.length ? Math.min(1, count / periodTarget) : 0;
-                const label = p.data.length
-                  ? `${count}/${Math.round(periodTarget)}`
-                  : "—";
-                return (
-                  <td key={p.key} className="text-right tabular-nums px-4 py-2" style={{ fontSize: 11, color: rateColor(rate) }}>
-                    {label}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
+                })}
+                <td className="px-4 py-2">
+                  <Sparkline bars={bars} />
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
