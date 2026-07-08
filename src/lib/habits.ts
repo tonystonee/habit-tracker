@@ -37,11 +37,12 @@ export const HABIT_EMOJI: Record<string, string> = {
  * Returns "<emoji> <habit>" for habits with a mapped emoji, or the bare
  * habit name otherwise.
  *
- * @param habit - The habit property name.
+ * @param habit    - The habit property name.
+ * @param emojiMap - Emoji lookup to use; defaults to the hardcoded `HABIT_EMOJI`.
  * @returns The display label for the habit.
  */
-export function habitLabel(habit: string): string {
-  const emoji = HABIT_EMOJI[habit];
+export function habitLabel(habit: string, emojiMap: Record<string, string> = HABIT_EMOJI): string {
+  const emoji = emojiMap[habit];
   return emoji ? `${emoji} ${habit}` : habit;
 }
 

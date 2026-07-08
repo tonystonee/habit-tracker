@@ -1,31 +1,8 @@
-import { Client } from "@notionhq/client";
 import { NextRequest, NextResponse } from "next/server";
-
-// --- Constants ---
-
-const POSITIVE = [
-  "Gym",
-  "Walking",
-  "Meditate",
-  "Take Creatine",
-  "Take Medication",
-  "Weekly Money Review",
-];
-
-const FLAGS = [
-  "Alcohol",
-  "Doomscrolling",
-  "Impulse Purchase",
-  "Junk Food / Late Night Eating",
-];
-
-const ALL_HABITS = [...POSITIVE, ...FLAGS];
+import { getNotionClient } from "@/lib/notion";
+import { getHabitData } from "@/lib/habit-config";
 
 // --- Helpers ---
-
-function getNotion() {
-  return new Client({ auth: process.env.NOTION_API_KEY });
-}
 
 // Matches the manual naming convention used in Notion: "Jul 3 (Fri)", "Jun 30 (Tues)"
 const WEEKDAYS = ["Sun", "Mon", "Tues", "Wed", "Thurs", "Fri", "Sat"];
@@ -67,16 +44,24 @@ function todayISO(searchParams?: URLSearchParams): string {
  * Fetches today's Notion page and returns its checkbox state for all habits.
  * If no page exists for today, `pageId` is null and all habits default to false.
  *
- * @returns {{ pageId: string | null; habits: Record<string, boolean> }}
+ * @returns {{ pageId: string | null; habits: Record<string, boolean>; habitConfig: { positive: string[]; flags: string[]; emoji: Record<string, string>; weeklyTargets: Record<string, number> } }}
  */
 export async function GET(request: NextRequest) {
   try {
-    const notion = getNotion();
+    const notion = getNotionClient();
     const dbId = process.env.NOTION_DB_ID;
 
     if (!dbId) {
       return NextResponse.json({ error: "NOTION_DB_ID is not configured" }, { status: 500 });
     }
+
+    const habitData = await getHabitData();
+    const habitConfig = {
+      positive: habitData.positive,
+      flags: habitData.flags,
+      emoji: habitData.emoji,
+      weeklyTargets: habitData.weeklyTargets,
+    };
 
     const today = todayISO(request.nextUrl.searchParams);
 
@@ -88,10 +73,10 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    const defaults = Object.fromEntries(ALL_HABITS.map((h) => [h, false]));
+    const defaults = Object.fromEntries(habitData.allHabits.map((h) => [h, false]));
 
     if (res.results.length === 0) {
-      return NextResponse.json({ pageId: null, habits: defaults });
+      return NextResponse.json({ pageId: null, habits: defaults, habitConfig });
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -99,10 +84,10 @@ export async function GET(request: NextRequest) {
     const props = page.properties as Record<string, any>;
 
     const habits = Object.fromEntries(
-      ALL_HABITS.map((h) => [h, props[h]?.checkbox ?? false])
+      habitData.allHabits.map((h) => [h, props[h]?.checkbox ?? false])
     );
 
-    return NextResponse.json({ pageId: page.id as string, habits });
+    return NextResponse.json({ pageId: page.id as string, habits, habitConfig });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -122,12 +107,14 @@ export async function GET(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
   try {
-    const notion = getNotion();
+    const notion = getNotionClient();
     const dbId = process.env.NOTION_DB_ID;
 
     if (!dbId) {
       return NextResponse.json({ error: "NOTION_DB_ID is not configured" }, { status: 500 });
     }
+
+    const habitData = await getHabitData();
 
     const body = (await request.json()) as {
       pageId: string | null;
@@ -140,7 +127,7 @@ export async function PATCH(request: NextRequest) {
     let { pageId } = body;
     const clientDate = body.date && /^\d{4}-\d{2}-\d{2}$/.test(body.date) ? body.date : null;
 
-    if (!ALL_HABITS.includes(habit)) {
+    if (!habitData.allHabits.includes(habit)) {
       return NextResponse.json({ error: `Unknown habit: ${habit}` }, { status: 400 });
     }
 

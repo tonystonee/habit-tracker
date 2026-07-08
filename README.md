@@ -78,10 +78,28 @@ Open [http://localhost:3000](http://localhost:3000).
 |----------|-------------|
 | `NOTION_API_KEY` | Notion integration token (`secret_...`) |
 | `NOTION_DB_ID` | UUID of your Notion habits database |
+| `NOTION_HABIT_CONFIG_DB_ID` | UUID of your Notion "Habit Config" database (optional — see below) |
 
 See `.env.local.example` for the format.
 
 ## Customising habits
+
+There are two ways to define which habits are tracked:
+
+### Option A — Notion-driven (recommended, no code changes)
+
+Create a separate "Habit Config" database in the same Notion workspace, with one row per habit and these exact properties:
+
+| Property | Type | Notes |
+|----------|------|-------|
+| `Name` | Title | Must match the corresponding checkbox property name in your habits database exactly |
+| `Category` | Select | Exactly two options: `Positive` or `Flag` |
+| `Emoji` | Text | Optional |
+| `Weekly Target` | Number | Optional — leave empty to default to 7×/week |
+
+Share the new database with the same Notion integration (Notion's "..." menu → Connections), then set `NOTION_HABIT_CONFIG_DB_ID` in `.env.local` to its ID. Adding, editing, or removing a row updates the app on next load — no code change or redeploy needed. If this variable is unset, empty, or unreachable, the app falls back to Option B below.
+
+### Option B — hardcoded fallback
 
 Edit [`src/lib/habits.ts`](src/lib/habits.ts) to match your own Notion database columns:
 
@@ -103,7 +121,7 @@ export const WEEKLY_TARGETS: Record<string, number> = {
 };
 ```
 
-The habit names must match the Notion checkbox property names exactly.
+The habit names must match the Notion checkbox property names exactly. This file is also the fallback used automatically whenever the Habit Config database (Option A) is unset or unavailable.
 
 ## Screenshots
 
