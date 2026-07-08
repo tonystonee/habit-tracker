@@ -3,32 +3,27 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Checkbox } from "@/components/ui/checkbox";
-import { habitLabel } from "@/lib/habits";
-
-// --- Constants ---
-
-const POSITIVE = [
-  "Gym",
-  "Walking",
-  "Meditate",
-  "Take Creatine",
-  "Take Medication",
-];
-
-const FLAGS = [
-  "Alcohol",
-  "Doomscrolling",
-  "Impulse Purchase",
-  "Junk Food / Late Night Eating",
-];
+import {
+  POSITIVE as FALLBACK_POSITIVE,
+  FLAGS as FALLBACK_FLAGS,
+  HABIT_EMOJI as FALLBACK_EMOJI,
+  habitLabel,
+} from "@/lib/habits";
 
 // --- Types ---
 
 type Habits = Record<string, boolean>;
 
+type HabitConfig = {
+  positive: string[];
+  flags: string[];
+  emoji: Record<string, string>;
+};
+
 type ApiResponse = {
   pageId: string | null;
   habits?: Habits;
+  habitConfig?: HabitConfig;
   error?: string;
 };
 
@@ -90,10 +85,11 @@ interface HabitRowProps {
   isFlag: boolean;
   disabled: boolean;
   flashing: boolean;
+  emojiMap: Record<string, string>;
   onToggle: (habit: string, next: boolean) => void;
 }
 
-function HabitRow({ habit, checked, isFlag, disabled, flashing, onToggle }: HabitRowProps) {
+function HabitRow({ habit, checked, isFlag, disabled, flashing, emojiMap, onToggle }: HabitRowProps) {
   const flashBg = flashing
     ? isFlag
       ? "bg-red-500/10"
@@ -125,7 +121,7 @@ function HabitRow({ habit, checked, isFlag, disabled, flashing, onToggle }: Habi
             : "text-muted-foreground group-hover:text-foreground"
         }`}
       >
-        {habitLabel(habit)}
+        {habitLabel(habit, emojiMap)}
       </span>
     </label>
   );
@@ -141,6 +137,11 @@ export default function TodayPage() {
   const [saving, setSaving] = useState<Set<string>>(new Set());
   // Tracks which rows are mid-flash so we can clear after the animation
   const [flashing, setFlashing] = useState<Set<string>>(new Set());
+  const [habitConfig, setHabitConfig] = useState<HabitConfig>({
+    positive: FALLBACK_POSITIVE,
+    flags: FALLBACK_FLAGS,
+    emoji: FALLBACK_EMOJI,
+  });
 
   useEffect(() => {
     const localDate = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local tz
@@ -150,10 +151,15 @@ export default function TodayPage() {
         if (d.error) throw new Error(d.error);
         setPageId(d.pageId ?? null);
         setHabits(d.habits ?? {});
+        if (d.habitConfig) setHabitConfig(d.habitConfig);
       })
       .catch((e: Error) => setErr(e.message))
       .finally(() => setLoading(false));
   }, []);
+
+  // "Weekly Money Review" is a positive habit but not a daily check-in item.
+  const POSITIVE = habitConfig.positive.filter((h) => h !== "Weekly Money Review");
+  const FLAGS = habitConfig.flags;
 
   const flash = useCallback((habit: string) => {
     setFlashing((prev) => new Set(prev).add(habit));
@@ -249,6 +255,7 @@ export default function TodayPage() {
                       isFlag={false}
                       disabled={saving.has(habit)}
                       flashing={flashing.has(habit)}
+                      emojiMap={habitConfig.emoji}
                       onToggle={toggle}
                     />
                   ))}
@@ -269,6 +276,7 @@ export default function TodayPage() {
                       isFlag={true}
                       disabled={saving.has(habit)}
                       flashing={flashing.has(habit)}
+                      emojiMap={habitConfig.emoji}
                       onToggle={toggle}
                     />
                   ))}

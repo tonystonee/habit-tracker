@@ -1,6 +1,6 @@
-import { Client } from "@notionhq/client";
 import { NextResponse } from "next/server";
-import { ALL_HABITS } from "@/lib/habits";
+import { getNotionClient } from "@/lib/notion";
+import { getHabitData } from "@/lib/habit-config";
 
 // --- Handler ---
 
@@ -11,18 +11,22 @@ import { ALL_HABITS } from "@/lib/habits";
  * and returns a cleaned, flat JSON array ready for the dashboard to consume.
  *
  * @param request - Incoming request; accepts optional `?days=N` query param (default 30, max 90).
- * @returns {{ entries: Array<{ date: string; [habit: string]: string | boolean }> }}
+ * @returns {{ entries: Array<{ date: string; [habit: string]: string | boolean }>, habitConfig: { positive: string[]; flags: string[]; emoji: Record<string, string>; weeklyTargets: Record<string, number> } }}
  *   `entries` — one object per Notion page, keyed by date and habit name.
  *   Habits not present in the Notion page default to `false`.
+ *   `habitConfig` — the current habit list/categorization, from Notion's Habit
+ *   Config database if available, else the hardcoded fallback.
  */
 export async function GET(request: Request) {
   try {
-    const notion = new Client({ auth: process.env.NOTION_API_KEY });
+    const notion = getNotionClient();
     const dbId = process.env.NOTION_DB_ID;
 
     if (!dbId) {
       return NextResponse.json({ error: "NOTION_DB_ID is not configured" }, { status: 500 });
     }
+
+    const habitData = await getHabitData();
 
     // --- Date range ---
 
@@ -46,6 +50,8 @@ export async function GET(request: Request) {
 
     // --- Transform pages into flat entries ---
 
+    const missingHabits = new Set<string>();
+
     const entries = res.results
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .map((page: any) => {
@@ -54,14 +60,32 @@ export async function GET(request: Request) {
         if (!date) return null;
 
         const entry: Record<string, string | boolean> = { date };
-        for (const habit of ALL_HABITS) {
+        for (const habit of habitData.allHabits) {
+          if (!(habit in props)) {
+            missingHabits.add(habit);
+            continue;
+          }
           entry[habit] = props[habit]?.checkbox ?? false;
         }
         return entry;
       })
       .filter(Boolean);
 
-    return NextResponse.json({ entries });
+    if (missingHabits.size > 0) {
+      console.warn(
+        `[api/habits] habit(s) in config have no matching checkbox property in the tracking database: ${[...missingHabits].join(", ")}`
+      );
+    }
+
+    return NextResponse.json({
+      entries,
+      habitConfig: {
+        positive: habitData.positive,
+        flags: habitData.flags,
+        emoji: habitData.emoji,
+        weeklyTargets: habitData.weeklyTargets,
+      },
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

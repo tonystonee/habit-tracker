@@ -1,22 +1,46 @@
 "use client";
 
-import { Fragment, useState, useEffect, useMemo, useCallback } from "react";
+import { Fragment, createContext, useContext, useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { BellRing } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { POSITIVE, FLAGS, WEEKLY_TARGETS, habitLabel, HABIT_EMOJI } from "@/lib/habits";
+import {
+  POSITIVE as FALLBACK_POSITIVE,
+  FLAGS as FALLBACK_FLAGS,
+  WEEKLY_TARGETS as FALLBACK_TARGETS,
+  HABIT_EMOJI as FALLBACK_EMOJI,
+  habitLabel,
+} from "@/lib/habits";
 
-// Habits shown in the daily check-in snapshot (excludes non-daily tracked habits)
-const DAILY_HABITS = POSITIVE.filter((h) => h !== "Weekly Money Review");
+// --- Habit config context ---
+// Populated from /api/habits' `habitConfig` (Notion-driven, or the hardcoded
+// fallback), and consumed by every view below instead of static imports.
+
+type HabitConfig = {
+  positive: string[];
+  flags: string[];
+  emoji: Record<string, string>;
+  weeklyTargets: Record<string, number>;
+};
+
+const FALLBACK_HABIT_CONFIG: HabitConfig = {
+  positive: FALLBACK_POSITIVE,
+  flags: FALLBACK_FLAGS,
+  emoji: FALLBACK_EMOJI,
+  weeklyTargets: FALLBACK_TARGETS,
+};
+
+const HabitConfigContext = createContext<HabitConfig>(FALLBACK_HABIT_CONFIG);
+const useHabitConfig = () => useContext(HabitConfigContext);
 
 // --- Types ---
 
 type Entry = { date: string; [k: string]: string | boolean };
 
-type ApiResponse = { entries?: Entry[]; error?: string };
+type ApiResponse = { entries?: Entry[]; habitConfig?: HabitConfig; error?: string };
 
 // --- Helpers ---
 
@@ -33,7 +57,7 @@ function localDateStr(d: Date): string {
  * Fills in a continuous 30-day window ending today, backfilling missing dates
  * with all-false entries so streaks and grids always span a full month.
  */
-function buildRange(raw: Entry[]): Entry[] {
+function buildRange(raw: Entry[], allHabits: string[]): Entry[] {
   const today = new Date();
   return Array.from({ length: 30 }, (_, i) => {
     const d = new Date(today);
@@ -42,7 +66,7 @@ function buildRange(raw: Entry[]): Entry[] {
     const found = raw.find((e) => e.date === date);
     if (found) return found;
     const blank: Entry = { date };
-    [...POSITIVE, ...FLAGS].forEach((h) => (blank[h] = false));
+    allHabits.forEach((h) => (blank[h] = false));
     return blank;
   });
 }
@@ -70,9 +94,9 @@ function completionRate(key: string, data: Entry[]): number {
 type Period = { label: string; key: string; data: Entry[] };
 
 /** Returns a blank entry with all habits set to false. */
-function blankEntry(date: string): Entry {
+function blankEntry(date: string, allHabits: string[]): Entry {
   const e: Entry = { date };
-  [...POSITIVE, ...FLAGS].forEach((h) => (e[h] = false));
+  allHabits.forEach((h) => (e[h] = false));
   return e;
 }
 
@@ -100,7 +124,7 @@ function dedupeEntries(entries: Entry[]): Entry[] {
  * (capped at today) so the denominator always reflects the full week.
  * Returns periods sorted oldest → newest.
  */
-function groupByWeek(entries: Entry[]): Period[] {
+function groupByWeek(entries: Entry[], allHabits: string[]): Period[] {
   const deduped = dedupeEntries(entries);
   const byDate = new Map(deduped.map((e) => [e.date, e]));
   const todayStr = localDateStr(new Date());
@@ -123,7 +147,7 @@ function groupByWeek(entries: Entry[]): Period[] {
         d.setDate(d.getDate() + i);
         const dateStr = localDateStr(d);
         if (dateStr > todayStr) break;
-        data.push(byDate.get(dateStr) ?? blankEntry(dateStr));
+        data.push(byDate.get(dateStr) ?? blankEntry(dateStr, allHabits));
       }
       const label = new Date(key + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
       return { label, key, data };
@@ -135,7 +159,7 @@ function groupByWeek(entries: Entry[]): Period[] {
  * (capped at today) so the denominator always reflects the full month.
  * Returns periods sorted oldest → newest.
  */
-function groupByMonth(entries: Entry[]): Period[] {
+function groupByMonth(entries: Entry[], allHabits: string[]): Period[] {
   const deduped = dedupeEntries(entries);
   const byDate = new Map(deduped.map((e) => [e.date, e]));
   const todayStr = localDateStr(new Date());
@@ -152,7 +176,7 @@ function groupByMonth(entries: Entry[]): Period[] {
       for (let day = 1; day <= daysInMonth; day++) {
         const dateStr = `${key}-${String(day).padStart(2, "0")}`;
         if (dateStr > todayStr) break;
-        data.push(byDate.get(dateStr) ?? blankEntry(dateStr));
+        data.push(byDate.get(dateStr) ?? blankEntry(dateStr, allHabits));
       }
       const label = new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "short", year: "2-digit" });
       return { label, key, data };
@@ -185,13 +209,14 @@ function periodCount(
   habit: string,
   data: Entry[],
   view: "weekly" | "monthly",
+  weeklyTargets: Record<string, number>,
 ): { count: number; target: number } {
   const today = new Date();
   const todayStr = localDateStr(today);
 
   let fromStr: string;
   let target: number;
-  const weeklyTarget = WEEKLY_TARGETS[habit] ?? 7;
+  const weeklyTarget = weeklyTargets[habit] ?? 7;
 
   if (view === "weekly") {
     const mon = new Date(today);
@@ -228,6 +253,10 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
  * and allows toggling individual habits via PATCH without leaving the dashboard.
  */
 function TodaySnapshot() {
+  const { positive, emoji } = useHabitConfig();
+  // Habits shown in the daily check-in snapshot (excludes non-daily tracked habits)
+  const DAILY_HABITS = positive.filter((h) => h !== "Weekly Money Review");
+
   const [habits, setHabits] = useState<Record<string, boolean>>({});
   const [pageId, setPageId] = useState<string | null>(null);
   const [saving, setSaving] = useState<Set<string>>(new Set());
@@ -303,7 +332,7 @@ function TodaySnapshot() {
                 opacity: busy ? 0.5 : 1,
               }}
             >
-              {habitLabel(habit)}
+              {habitLabel(habit, emoji)}
             </button>
           );
         })}
@@ -329,6 +358,7 @@ interface WeeklyReviewCountBoxProps {
  * The toggle is only shown in weekly mode — in monthly mode it's not actionable.
  */
 function WeeklyReviewCountBox({ count, target, todayAlreadyDone, countView }: WeeklyReviewCountBoxProps) {
+  const { emoji } = useHabitConfig();
   const [checked, setChecked] = useState(todayAlreadyDone);
   const [pageId, setPageId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -404,7 +434,7 @@ function WeeklyReviewCountBox({ count, target, todayAlreadyDone, countView }: We
           className="text-[9px] uppercase tracking-[0.15em] truncate"
           style={{ color: needsAction ? "#fbbf24" : "hsl(var(--muted-foreground))" }}
         >
-          {habitLabel("Weekly Money Review")}
+          {habitLabel("Weekly Money Review", emoji)}
         </span>
       </div>
       <span className="tabular-nums font-medium" style={{ fontSize: 22, color }}>
@@ -442,10 +472,11 @@ function WeeklyReviewCountBox({ count, target, todayAlreadyDone, countView }: We
 }
 
 function StreaksView({ data }: { data: Entry[] }) {
+  const { positive: POSITIVE, weeklyTargets, emoji } = useHabitConfig();
   const [countView, setCountView] = useState<"weekly" | "monthly">("weekly");
 
   // Only habits with non-daily targets get count boxes
-  const trackedHabits = Object.keys(WEEKLY_TARGETS);
+  const trackedHabits = Object.keys(weeklyTargets);
 
   return (
     <div>
@@ -471,7 +502,7 @@ function StreaksView({ data }: { data: Entry[] }) {
         </div>
         <div className="flex gap-3">
           {trackedHabits.map((habit) => {
-            const { count, target } = periodCount(habit, data, countView);
+            const { count, target } = periodCount(habit, data, countView, weeklyTargets);
 
             if (habit === "Weekly Money Review") {
               const todayEntry = data[data.length - 1];
@@ -497,7 +528,7 @@ function StreaksView({ data }: { data: Entry[] }) {
                 style={{ background: hit ? "rgba(74,222,128,0.04)" : "transparent" }}
               >
                 <span className="text-[9px] uppercase tracking-[0.15em] text-muted-foreground truncate">
-                  {habitLabel(habit)}
+                  {habitLabel(habit, emoji)}
                 </span>
                 <span className="tabular-nums font-medium" style={{ fontSize: 22, color }}>
                   {count}
@@ -523,7 +554,7 @@ function StreaksView({ data }: { data: Entry[] }) {
           return (
             <div key={habit} className="flex items-center gap-3">
               <span className="text-[11px] uppercase tracking-wide text-muted-foreground w-44 shrink-0 truncate">
-                {habitLabel(habit)}
+                {habitLabel(habit, emoji)}
               </span>
 
               {/* Progress bar */}
@@ -555,6 +586,7 @@ function StreaksView({ data }: { data: Entry[] }) {
 // --- Grid tab ---
 
 function GridView({ data }: { data: Entry[] }) {
+  const { positive: POSITIVE, flags: FLAGS, emoji: HABIT_EMOJI } = useHabitConfig();
   const all = [...POSITIVE, ...FLAGS];
 
   return (
@@ -603,7 +635,7 @@ function GridView({ data }: { data: Entry[] }) {
                     className="text-muted-foreground"
                     style={{ fontSize: 10, textAlign: "right", paddingRight: 10, whiteSpace: "nowrap", verticalAlign: "middle" }}
                   >
-                    {habitLabel(habit)}
+                    {habitLabel(habit, HABIT_EMOJI)}
                   </td>
                   {data.map((e) => {
                     const on = e[habit] === true;
@@ -667,6 +699,7 @@ function GridView({ data }: { data: Entry[] }) {
 // --- Flags tab ---
 
 function FlagsView({ data }: { data: Entry[] }) {
+  const { flags: FLAGS, emoji } = useHabitConfig();
   return (
     <div>
       <SectionLabel>watch list — last 30 days</SectionLabel>
@@ -686,7 +719,7 @@ function FlagsView({ data }: { data: Entry[] }) {
                 />
 
                 <span className="text-[11px] uppercase tracking-wide text-muted-foreground flex-1 truncate">
-                  {habitLabel(flag)}
+                  {habitLabel(flag, emoji)}
                 </span>
 
                 <Badge variant={isClean ? "success" : "danger"}>
@@ -720,6 +753,7 @@ function FlagsView({ data }: { data: Entry[] }) {
  * done (red for a triggered flag habit), muted when not.
  */
 function HabitPill({ habit, on, isFlag }: { habit: string; on: boolean; isFlag: boolean }) {
+  const { emoji } = useHabitConfig();
   return (
     <span
       className="text-[9px] uppercase tracking-[0.1em] px-2 py-0.5 rounded border whitespace-nowrap"
@@ -729,12 +763,13 @@ function HabitPill({ habit, on, isFlag }: { habit: string; on: boolean; isFlag: 
         background: on ? (isFlag ? "rgba(248,113,113,0.06)" : "rgba(74,222,128,0.06)") : "transparent",
       }}
     >
-      {habitLabel(habit)}
+      {habitLabel(habit, emoji)}
     </span>
   );
 }
 
 function LogView({ data }: { data: Entry[] }) {
+  const { positive: POSITIVE, flags: FLAGS } = useHabitConfig();
   const rows = [...data].reverse();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -854,6 +889,7 @@ function weekRangeLabel(mondayKey: string): string {
  * "this week" — paginated via its own 90-day fetch so past weeks are browsable.
  */
 function HabitsView({ data }: { data: Entry[] }) {
+  const { positive: POSITIVE, flags: FLAGS, weeklyTargets, emoji } = useHabitConfig();
   const [view, setView] = useState<"weekly" | "monthly">("monthly");
   const [weekEntries, setWeekEntries] = useState<Entry[]>([]);
   const [weekIndex, setWeekIndex] = useState(-1); // -1 = latest week, set once loaded
@@ -866,7 +902,7 @@ function HabitsView({ data }: { data: Entry[] }) {
       .catch(() => setWeekEntries([]));
   }, []);
 
-  const weeks = useMemo(() => groupByWeek(weekEntries), [weekEntries]);
+  const weeks = useMemo(() => groupByWeek(weekEntries, all), [weekEntries, all]);
   const idx = weekIndex === -1 ? weeks.length - 1 : Math.min(weekIndex, weeks.length - 1);
   const selectedWeek = weeks[idx];
 
@@ -958,7 +994,7 @@ function HabitsView({ data }: { data: Entry[] }) {
                     )}
                     <tr className={rowBg}>
                       <td className="text-left text-foreground px-4 py-2 whitespace-nowrap" style={{ fontSize: 11 }}>
-                        {habitLabel(habit)}
+                        {habitLabel(habit, emoji)}
                       </td>
                       <td className="text-right tabular-nums text-muted-foreground px-4 py-2" style={{ fontSize: 11 }}>
                         {clean > 0 ? `${clean}d` : "—"}
@@ -980,13 +1016,13 @@ function HabitsView({ data }: { data: Entry[] }) {
               const count = windowData.filter((e) => e[habit] === true).length;
               // Scale the weekly target to the window length so "4x/week" reads
               // as ~17/30 over a month rather than judged against every day.
-              const weeklyTarget = WEEKLY_TARGETS[habit] ?? 7;
+              const weeklyTarget = weeklyTargets[habit] ?? 7;
               const target = Math.round(weeklyTarget * (windowData.length / 7));
               const rate = target > 0 ? Math.min(1, count / target) : 0;
               return (
                 <tr key={habit} className={rowBg}>
                   <td className="text-left text-foreground px-4 py-2 whitespace-nowrap" style={{ fontSize: 11 }}>
-                    {habitLabel(habit)}
+                    {habitLabel(habit, emoji)}
                   </td>
                   <td className="text-right tabular-nums text-muted-foreground px-4 py-2" style={{ fontSize: 11 }}>
                     {s > 0 ? `${s}d` : "—"}
@@ -1053,6 +1089,7 @@ function Sparkline({ bars }: { bars: { value: number; color: string; label: stri
  * @param isFlag   - When true, uses inverse color scale (lower occurrences = green).
  */
 function ProgressTable({ habits, periods, isFlag }: { habits: string[]; periods: Period[]; isFlag: boolean }) {
+  const { weeklyTargets, emoji } = useHabitConfig();
   return (
     <div className="overflow-x-auto rounded border border-border">
       <table className="w-full border-collapse">
@@ -1085,7 +1122,7 @@ function ProgressTable({ habits, periods, isFlag }: { habits: string[]; periods:
                 return { value, color, label: `${p.label}: ${count === 0 ? "clean" : `${count}×`}` };
               }
               const count = p.data.filter((e) => e[habit] === true).length;
-              const weeklyTarget = WEEKLY_TARGETS[habit] ?? 7;
+              const weeklyTarget = weeklyTargets[habit] ?? 7;
               const periodTarget = weeklyTarget * (p.data.length / 7);
               const rate = p.data.length ? Math.min(1, count / periodTarget) : 0;
               return { value: rate, color: rateColor(rate), label: `${p.label}: ${Math.round(rate * 100)}%` };
@@ -1097,7 +1134,7 @@ function ProgressTable({ habits, periods, isFlag }: { habits: string[]; periods:
                   className="text-left text-foreground px-4 py-2 whitespace-nowrap"
                   style={{ fontSize: 11 }}
                 >
-                  {habitLabel(habit)}
+                  {habitLabel(habit, emoji)}
                 </td>
                 {periods.map((p, j) => {
                   if (isFlag) {
@@ -1109,7 +1146,7 @@ function ProgressTable({ habits, periods, isFlag }: { habits: string[]; periods:
                     );
                   }
                   const count = p.data.filter((e) => e[habit] === true).length;
-                  const weeklyTarget = WEEKLY_TARGETS[habit] ?? 7;
+                  const weeklyTarget = weeklyTargets[habit] ?? 7;
                   const periodTarget = weeklyTarget * (p.data.length / 7);
                   const label = p.data.length
                     ? `${count}/${Math.round(periodTarget)}`
@@ -1137,6 +1174,8 @@ function ProgressTable({ habits, periods, isFlag }: { habits: string[]; periods:
  * completion rates for positive habits and raw occurrence counts for flags.
  */
 function ProgressView() {
+  const { positive: POSITIVE, flags: FLAGS } = useHabitConfig();
+  const allHabits = useMemo(() => [...POSITIVE, ...FLAGS], [POSITIVE, FLAGS]);
   const [view, setView] = useState<"weekly" | "monthly">("weekly");
   const [allEntries, setAllEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1157,10 +1196,10 @@ function ProgressView() {
   useEffect(() => { load(); }, [load]);
 
   const periods = useMemo(() => {
-    const grouped = view === "weekly" ? groupByWeek(allEntries) : groupByMonth(allEntries);
+    const grouped = view === "weekly" ? groupByWeek(allEntries, allHabits) : groupByMonth(allEntries, allHabits);
     // Last 8 weeks or last 3 months
     return view === "weekly" ? grouped.slice(-8) : grouped.slice(-3);
-  }, [view, allEntries]);
+  }, [view, allEntries, allHabits]);
 
   if (loading) return <p className="text-[11px] tracking-[0.2em] text-primary animate-pulse">loading...</p>;
   if (err) return (
@@ -1203,6 +1242,7 @@ function ProgressView() {
 
 export default function Dashboard() {
   const [raw, setRaw] = useState<Entry[]>([]);
+  const [habitConfig, setHabitConfig] = useState<HabitConfig>(FALLBACK_HABIT_CONFIG);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
@@ -1212,12 +1252,17 @@ export default function Dashboard() {
       .then((d: ApiResponse) => {
         if (d.error) throw new Error(d.error);
         setRaw(d.entries ?? []);
+        if (d.habitConfig) setHabitConfig(d.habitConfig);
       })
       .catch((e: Error) => setErr(e.message))
       .finally(() => setLoading(false));
   }, []);
 
-  const data = useMemo(() => buildRange(raw), [raw]);
+  const allHabits = useMemo(
+    () => [...habitConfig.positive, ...habitConfig.flags],
+    [habitConfig]
+  );
+  const data = useMemo(() => buildRange(raw, allHabits), [raw, allHabits]);
 
   // Compute human-readable date range label
   const today = new Date();
@@ -1226,6 +1271,7 @@ export default function Dashboard() {
   const rangeLabel = `${from.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${today.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
 
   return (
+    <HabitConfigContext.Provider value={habitConfig}>
     <main className="min-h-screen bg-background px-6 py-10">
       <div className="max-w-4xl mx-auto">
 
@@ -1303,5 +1349,6 @@ export default function Dashboard() {
 
       </div>
     </main>
+    </HabitConfigContext.Provider>
   );
 }
