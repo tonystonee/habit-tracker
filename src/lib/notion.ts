@@ -23,6 +23,11 @@ export type RawHabitConfigRow = {
 // --- Cache ---
 
 let cache: { data: RawHabitConfigRow[]; fetchedAt: number } | null = null;
+// 5 min balances Notion API load against edit-to-visible latency. Plain
+// in-memory TTL rather than `unstable_cache`: this is low-traffic enough that
+// cross-instance coherency doesn't matter, and a module variable behaves
+// identically in dev/prod (unlike unstable_cache). Not shared across
+// serverless cold starts — each new instance just refetches once.
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 /**
