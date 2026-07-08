@@ -22,6 +22,7 @@ A personal habit tracking dashboard built with Next.js 15 and Notion. Notion is 
 - A [Notion](https://notion.so) account
 - A Notion integration token
 - A Notion database set up with the schema below
+- (Optional) A second Notion database for Notion-driven habit config
 
 ## Notion setup
 
@@ -52,6 +53,19 @@ The database ID is the UUID in the database URL:
 https://www.notion.so/<workspace>/<DATABASE_ID>?v=...
 ```
 
+### 5. (Optional) Create the Habit Config database
+
+By default the app tracks the habits hardcoded in [`src/lib/habits.ts`](src/lib/habits.ts). To manage your habit list from Notion instead — add, remove, or edit habits with no code changes — create a second, separate database called **Habit Config** in the same workspace, with one row per habit:
+
+| Property | Type | Notes |
+|----------|------|-------|
+| `Name` | Title | Must match the corresponding checkbox property name in your habits database exactly |
+| `Category` | Select | Exactly two options: `Positive` or `Flag` |
+| `Emoji` | Text | Optional |
+| `Weekly Target` | Number | Optional — leave empty to default to 7×/week |
+
+Share this database with your integration too (same step as above), then copy its ID into `NOTION_HABIT_CONFIG_DB_ID`. If you skip this step, the app falls back to the hardcoded list automatically — see [Customising habits](#customising-habits) for details.
+
 ## Getting started
 
 ```bash
@@ -64,7 +78,7 @@ npm install
 
 # 3. Configure environment variables
 cp .env.local.example .env.local
-# Fill in your NOTION_API_KEY and NOTION_DB_ID
+# Fill in your NOTION_API_KEY and NOTION_DB_ID (and optionally NOTION_HABIT_CONFIG_DB_ID)
 
 # 4. Start the dev server
 npm run dev
@@ -88,16 +102,7 @@ There are two ways to define which habits are tracked:
 
 ### Option A — Notion-driven (recommended, no code changes)
 
-Create a separate "Habit Config" database in the same Notion workspace, with one row per habit and these exact properties:
-
-| Property | Type | Notes |
-|----------|------|-------|
-| `Name` | Title | Must match the corresponding checkbox property name in your habits database exactly |
-| `Category` | Select | Exactly two options: `Positive` or `Flag` |
-| `Emoji` | Text | Optional |
-| `Weekly Target` | Number | Optional — leave empty to default to 7×/week |
-
-Share the new database with the same Notion integration (Notion's "..." menu → Connections), then set `NOTION_HABIT_CONFIG_DB_ID` in `.env.local` to its ID. Adding, editing, or removing a row updates the app on next load — no code change or redeploy needed. If this variable is unset, empty, or unreachable, the app falls back to Option B below.
+Set up the Habit Config database per [step 5 of Notion setup](#5-optional-create-the-habit-config-database) and set `NOTION_HABIT_CONFIG_DB_ID`. Adding, editing, or removing a row there updates the app on next load — no code change or redeploy needed. If this variable is unset, empty, or unreachable, the app falls back to Option B below.
 
 ### Option B — hardcoded fallback
 
